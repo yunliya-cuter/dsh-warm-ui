@@ -16,10 +16,17 @@ for (const old of document.querySelectorAll("[" + TAG + "]")) old.remove();
 const WARP_KEY = "dsh-warm-x-glassWarp";
 const glassSvg = document.querySelector("[data-wta-glass-svg]");
 const filters = glassSvg ? Array.from(glassSvg.querySelectorAll("filter")) : [];
-const noiseNodes = glassSvg ? Array.from(glassSvg.querySelectorAll("feTurbulence")) : [];
+/* 流动层的两颗原语按**结构**认（紧跟在 feTurbulence 后面的位移），不按结果名认 ——
+   结果名是插件内部的名字，探针抄一份就等于把同一个含义写两遍。 */
 const warpNodes = glassSvg
-	? Array.from(glassSvg.querySelectorAll("feDisplacementMap")).filter((d) => d.getAttribute("in2") === "warpNoise")
+	? Array.from(glassSvg.querySelectorAll("feDisplacementMap")).filter((d) => {
+		const prev = d.previousElementSibling;
+		return prev && prev.tagName === "feTurbulence";
+	})
 	: [];
+const noiseNodes = warpNodes
+	.map((d) => d.previousElementSibling)
+	.filter(Boolean);
 
 /* 玻璃元素按"我们自己写上去的那条内联 backdrop-filter"找：卡片本身没有 data-slot
    （data-slot 在它的祖先上），所以不去抄一份选择器，也不假设 DSH 的 DOM 结构。

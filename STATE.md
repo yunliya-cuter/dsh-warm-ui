@@ -85,7 +85,7 @@
 | 真机断言（`--browser`，视口取自契约 `viewports.wide`） | `chip` 态、行高 24、胶囊在、两根滑杆藏、卡片 952px、溢出 0、无主样式表 0、每个登记节点 1 个；`engine: gecko` 且 `glassWarp: {noise: 0, displacement: 0}`（**引擎门槛真的生效**） |
 | 模块图谱（同一拍实测） | 有 `dsh-warm-shared`、没有 `dsh-warm-dynbg` |
 | 热重载回归（`--hmr`） | `rebuilt=2` 帧；每拍 `base/extra/wallpaper` 各 1 份、无主 0、画布 1、溢出 0 |
-| 流动层（无头 Edge，两相位夹具差分） | 滤镜里 `feTurbulence` ×2、位移 ×2；驱动值确实在变；两时刻 平均像素差 **13.32**、5.2% 像素差>8、逐窗口位移 −2…+2px |
+| 流动层（无头 Edge，两相位夹具差分） | 滤镜里 `feTurbulence` ×2、位移 ×2；驱动值确实在变；两时刻 平均像素差 **7.88–13.32**、3.1–5.2% 像素差>8、逐窗口位移 −2…+2px；**同图的对照区**（无玻璃）0.02 / 0.0% |
 | 参考截图 | `contract/refs/toolbar-chip-wide.png`、`toolbar-native-narrow.png`、`glass-warp-phase-a.png` / `-b.png`（都自己看过） |
 
 ## 2. 输入框在 plan 模式下变宽的结论（已实测，不是我们干的）
