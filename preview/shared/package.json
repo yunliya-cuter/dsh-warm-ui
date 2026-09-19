@@ -1,0 +1,26 @@
+{
+  "name": "dsh-warm-shared",
+  "version": "0.0.1",
+  "private": true,
+  "description": "暖色插件族共用的浏览器侧工具：平台约定的样式表注入三件套 + 属性名转换。被 dsh-warm-ui / dsh-warm-wallpaper 依赖。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "client": {
+      "platform": "web"
+    }
+  }
+}

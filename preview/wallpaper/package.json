@@ -1,0 +1,29 @@
+{
+  "name": "dsh-warm-wallpaper",
+  "version": "0.0.1",
+  "private": true,
+  "description": "动态壁纸：关 / 纸 / 摩尔纹 / 焦散，可即时切换。3081 与 3082 都挂。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "external": [
+        "dsh-warm-shared"
+      ]
+    }
+  }
+}

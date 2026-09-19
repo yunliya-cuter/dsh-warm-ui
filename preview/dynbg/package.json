@@ -1,0 +1,26 @@
+{
+  "name": "dsh-warm-dynbg",
+  "version": "0.0.1",
+  "private": true,
+  "description": "已停用（提灯效果 2026-09-18 删除，patch 配置 2026-09-19 摘除）。本目录只作历史存档，没有任何进程加载它。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "client": {
+      "platform": "web"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "dsh-warm-brandgag",
+  "version": "0.0.1",
+  "private": true,
+  "description": "品牌文字彩蛋：deepseek → deepsleep，HARNESS → 狗圈。3081 与 3082 都挂。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "client": {
+      "platform": "web"
+    }
+  }
+}

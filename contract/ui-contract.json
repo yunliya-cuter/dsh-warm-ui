@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "title": "dsh-warm-ui 界面契约",
+  "howToRead": "这份文件是「UI 应该长什么样」的唯一机器可读版本：静态检查（tools/check.mjs）核对名字/归属，真机探针（tools/check.mjs --browser）核对数字与可见性。改设计先改这里，再改代码。",
+  "packages": {
+    "dsh-warm-shared": {
+      "role": "shared",
+      "entry": "preview/shared/lib/client.js",
+      "manifest": "preview/shared/package.json",
+      "exports": ["createStyleInstaller", "cssPropertyName"],
+      "styleSheets": [],
+      "ownerKeys": [],
+      "detachedOwnerKeys": [],
+      "inLayoutOwnerKeys": [],
+      "markers": [],
+      "cssVarsFromJs": [],
+      "mountHelpers": ["installStyleSheet"]
+    },
+    "dsh-warm-ui": {
+      "role": "consumer",
+      "entry": "lib/client.js",
+      "manifest": "package.json",
+      "requires": ["dsh-warm-shared"],
+      "styleSheets": [
+        { "name": "base", "marker": "data-dsh-warm-ui", "cssTemplate": "STYLESHEET", "cssVarPrefix": "--wta-" },
+        { "name": "extra", "marker": "data-dsh-warm-extra", "cssTemplate": "EXTRA_STYLESHEET", "cssVarPrefix": "--wta-" }
+      ],
+      "ownerKeys": ["glassSvg", "optimizerPop", "guardNote", "collapseChip"],
+      "detachedOwnerKeys": ["glassSvg", "optimizerPop", "guardNote"],
+      "inLayoutOwnerKeys": ["collapseChip"],
+      "onDemandOwnerKeys": ["guardNote"],
+      "markers": [
+        "data-dsh-warm-owner",
+        "data-dsh-warm-collapse",
+        "data-dsh-warm-optimizer-pop",
+        "data-dsh-warm-guard-note",
+        "data-wta-glass-svg",
+        "data-dsh-warm-dpo",
+        "data-dsh-warm-bold"
+      ],
+      "cssVarsFromJs": ["--wta-glass-tint-cur"],
+      "mountHelpers": ["mountDetached", "installStyleSheet"]
+    },
+    "dsh-warm-wallpaper": {
+      "role": "consumer",
+      "entry": "preview/wallpaper/lib/client.js",
+      "manifest": "preview/wallpaper/package.json",
+      "requires": ["dsh-warm-shared"],
+      "styleSheets": [
+        { "name": "base", "marker": "data-dsh-warm-wallpaper-style", "cssTemplate": "STYLESHEET", "cssVarPrefix": "--wlp-" }
+      ],
+      "ownerKeys": ["layer"],
+      "detachedOwnerKeys": ["layer"],
+      "inLayoutOwnerKeys": [],
+      "markers": [
+        "data-dsh-warm-owner",
+        "data-dsh-warm-wallpaper-layer",
+        "data-dsh-warm-wallpaper"
+      ],
+      "cssVarsFromJs": [],
+      "mountHelpers": ["mountLayer", "installStyleSheet"]
+    }
+  },
+  "toolbar": {
+    "stateAttribute": "data-dsh-warm-dpo",
+    "states": ["chip", "native", "fallback"],
+    "rowHeightPx": 24,
+    "rowHeightVar": { "package": "dsh-warm-ui", "name": "--wta-ctl-h" },
+    "meaning": {
+      "chip": "宽屏：我们的「优化」胶囊在、插件两根滑杆都藏起来",
+      "native": "窄屏：插件自己的档位胶囊在、权限滑杆藏起来、我们的胶囊不在",
+      "fallback": "认不出插件 DOM：一切原样，我们的胶囊不在"
+    }
+  },
+  "composer": {
+    "widthPreferenceKey": "dsh.conversation.contentWidth",
+    "contentDefaultCapPx": 920,
+    "contentMinPx": 640,
+    "edgeBudgetPx": 176,
+    "sideClearancePx": 16,
+    "invariant": "卡片宽度 = 会话内容宽度 + 32；无偏好时内容宽度 = clamp(680, 列宽 * 0.64, 920)，有偏好时 = clamp(偏好, 640, 列宽 - 176)",
+    "measuredAgainst": "dsh-client-ui-conversation/lib/client.js 的 WIDTH_PREF_KEY / resolveContentWidth / uV2eYG_card"
+  },
+  "invariants": {
+    "documentOverflowPx": 0,
+    "styleTagPerSheet": 1,
+    "nodePerOwnerKey": 1,
+    "unownedStyleTags": 0
+  },
+  "viewports": {
+    "ref": { "width": 1280, "height": 560, "dpr": 1.2 },
+    "wide": { "width": 1752, "height": 830, "dpr": 1.2 }
+  }
+}
