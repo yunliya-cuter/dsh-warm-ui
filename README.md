@@ -8,6 +8,9 @@
 
 ## 它改了什么（技术细节）
 
+> 液态玻璃的折射与"流动层"（玻璃底下的内容持续轻微游动）写在
+> `contract/ui-contract.md` 第 6 节：数字、三道门、以及**为什么 Firefox 没有这一层**（实测）。
+
 ### 1. 暖色：叠一层 theme token
 
 DSH 的配色是两级变量：`--dsw-static-*`（色阶）→ `--dsw-alias-*`（语义别名）。别名基本都写成
@@ -49,6 +52,7 @@ DSH 的配色是两级变量：`--dsw-static-*`（色阶）→ `--dsw-alias-*`�
 | 字色 | 0 冷（贴近 DSH 默认灰） | `dsh-warm-tint` | 看着眼熟、最不容易累；暖色文字会发涩 |
 | 加粗 | 1 暖·极弱 | `dsh-warm-bold` | 见下 |
 | 标题 | 4 中性纯灰·更暗 −20% | `dsh-warm-heading` | 见下 |
+| 玻璃流动 | 1 开 | `dsh-warm-x-glassWarp` | 玻璃底下的内容持续轻微游动；`0` = 只有静止的折射 |
 
 ### 面亮：白天 / 夜间
 
@@ -123,6 +127,10 @@ bash /mnt/d/projects/dsh-warm-ui/uninstall.sh
 - `WARM_ACCENT`：强调色（发送按钮、滑杆、链接）。
 - `WARMTH_LEVELS` / `TEXT_LEVELS` / `TINT_LEVELS` / `SURFACE_LEVELS`：暖度、字亮、字色、面亮的档位定义。
 - `BOLD_LEVELS` / `HEADING_LEVELS`：加粗与标题的档位定义。
+- `GLASS_MATERIAL` / `GLASS_CALM`：玻璃的材质（斜面、厚度、压暗、回光、阅读态系数）。
+- `GLASS_WARP`：玻璃的**流动**配方（幅度 `amp`、周期 `period`、帧率 `fps`、两条摆动）。
+  想更明显就加 `amp`，想更慢就加 `period`；`ampSwing`/`freqSwing` 给 0 = 只呼吸或只变形。
+  这一层在 Firefox 上不生效（平台不支持，见上），改了只在 Chromium 看得到。
 - `STYLESHEET` 里的 `.dpo-controls` 段落：输入栏控件的高度、滑杆宽度、字号等。
 
 日常换档不用改代码：侧栏底部的「外观」面板点一下即可（记在浏览器里）。
@@ -151,9 +159,13 @@ webserver 按请求读盘，服务端只在 HMR 里按内容变更推送）。
 ## 改完怎么确认没改坏
 
 ```bash
-node tools/check.mjs              # 静态：语法 / 样式归属 / 注入登记 / 挂载入口 / 变量闭包
+node tools/check.mjs              # 静态：语法 / 样式归属 / 客户端插件形状 / 注入登记 / 挂载入口 /
+                                  #       变量闭包 / 契约数字 / 共享依赖 / 探针可解析 / 动效门槛
 node tools/check.mjs --browser    # 追加真机断言（需要 Windows 侧 Firefox + Marionette，见 tools/README.md）
 ```
+
+Chromium 侧那两件事（玻璃底下的东西**被扭**、以及它**在动**）要另跑两个探针，
+命令与读法写在 `tools/README.md` 第 5 节；参考图在 `contract/refs/glass-warp-phase-*.png`。
 
 **「UI 应该长什么样」写在一份契约里**（`contract/ui-contract.json` 机器可读 +
 `contract/ui-contract.md` 人读版）：工具行三态的外观、行高、注入节点的登记表、
@@ -202,6 +214,9 @@ localStorage.removeItem('dsh.conversation.contentWidth'); location.reload();
   （页面只剩「Failed to load plugins」）。工具型包（`preview/shared`）也要写一对空实现。
 - **平台约定**：`cordis.patch.yml` 是**热加载**的（`dsh.profile.patchReload: "live"`），
   加/删条目刷新页面即可；但改包的 `dsh.client` 清单（如 `external`）要重启才会被重新读取。
+- **平台能力（实测）**：Firefox 完全不认 `backdrop-filter` 里的 `url(#…)`（三种配方位移全为 0），
+  Chromium 认。所以"玻璃底下的内容被扭 / 在动"这件事只在 Chromium 上看得见 —— 见
+  `contract/ui-contract.md` 第 6 节与 `tools/probes/engine-glass.js`。
 
 ## 包结构（谁共享、谁独立）
 

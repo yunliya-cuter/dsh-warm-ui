@@ -114,3 +114,50 @@ localStorage.removeItem("dsh.conversation.contentWidth"); location.reload();
 `checkCssVars` —— 它们看着像，但每个包的清扫副作用不同（壁纸要顺带清渲染器缓存），
 硬抽一层只会多一层间接。共用的**约定**写在契约里，代码保持各包自洽。
 
+## 6. 液态玻璃的「流动层」（`GLASS_WARP`）
+
+玻璃底下看到的东西除了被折射掰弯，还会**缓慢地游动**。用户的要求原话是
+"能看清字，但要明显看得出在动" —— 静止的折射只有一个歪掉的像，读起来是一块板子。
+
+数据只在 `GLASS_WARP` 表里（machine 版在 `ui-contract.json` 的 `glass.warp`）：
+
+| 字段 | 值 | 含义 |
+| --- | --- | --- |
+| 配方 | `ripple` | 表的一行；换一种流动 = 加一行 |
+| `amp` | 4.2px | 额外位移的峰值（叠在折射上；噪声波长约 180px，所以是缓波不是抖动） |
+| `period` | 9s | 一次完整流动的秒数 |
+| `fps` | 20 | 每拍要让浏览器重跑一遍滤镜链，所以**故意低频** |
+| `ampSwing` / `freqSwing` | 0.6 / 0.45 | 幅度与噪声频率各自摆动的比例（两条错相，才像流动） |
+
+### 三道门（`tools/check.mjs` 的「动效门槛」守着）
+
+1. **系统设置**：`prefers-reduced-motion: reduce` 时驱动不写属性；
+2. **开关**：`localStorage['dsh-warm-x-glassWarp'] = 0`（`EXTRA_DEFAULTS` 里的一行），改完刷新页面；
+3. **引擎列**：`GLASS_BACKDROP_ENGINES[].warp` 逐行表态，契约的 `glass.warp.engineSupport`
+   是它的对照表 —— 加一条引擎配方就**被迫**回答一次"这台引擎能不能做流动层"。
+
+**关掉时不给滤镜链加任何原语**（不是"加一条幅度 0 的位移"）：画面与没有这一层时逐像素相同。
+
+### 为什么 Firefox 没有这一层（实测，不是猜）
+
+| 滤镜挂在哪 | Chromium（无头 Edge） | Firefox 154（无头） |
+| --- | --- | --- |
+| `backdrop-filter: url(#…)` | ✓ `feOffset` +12.00px、`feImage` −12.00px、`feTurbulence` 打乱图案 | ✗ **三种配方全部 0px** |
+| `filter: url(#…)`（元素自身） | ✓ | ✓（`feImage` 要给 `xlink:href`，只写 `href` 等于没有图源） |
+
+量法：`tools/probes/engine-glass.js`（同一张竖条纹，压了玻璃的那块相对没压的那块位移多少）。
+Firefox 唯一的替代路是"把带限位移挂在会话内容那个大元素上"，实测每帧多花 ≥17ms
+（`tools/probes/glass-cost.js`：中位帧 33ms → 50ms，而只要挂着就付这个钱），
+会把滚动帧率砍半 —— 所以**不做**，Firefox 的玻璃保持静止的折射。
+
+Chromium 侧"确实在动"怎么验：`tools/probes/glass-warp.js` 把**插件自己那条滤镜**挂到
+探针自造的一块条纹上（父子关系保证条纹真在 backdrop 里），两次不同时刻的截图做差分；
+参考图 `refs/glass-warp-phase-a.png` / `-b.png`。注意真实卡片**量不了**：它背后是会变的
+会话内容，而给它另铺底纹也不行（卡片在 app 根的层叠上下文里，body 级注入的 z-index 压得住
+整棵 app，却进不了卡片的 backdrop）。
+
+| 参考图 | 截图那一刻的驱动值（`readable.after`） | 两次之间的差异 |
+| --- | --- | --- |
+| `refs/glass-warp-phase-a.png` | `baseFrequency` 0.003287 / `scale` 8.100 | 平均像素差 13.32；5.2% 的像素差 >8；逐窗口位移差 −2…+2 px |
+| `refs/glass-warp-phase-b.png` | `baseFrequency` 0.006667 / `scale` 5.738 | （同上，两图互为对照） |
+

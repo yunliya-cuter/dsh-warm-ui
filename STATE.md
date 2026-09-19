@@ -2,8 +2,9 @@
 
 > 这份文件的目的：**上下文被压缩/换新会话之后，靠它就能接着干**，不用重新做一遍审计。
 > 一句话现状：**维护性改造（P0 + P1）全部做完并实测通过；死配置 dynbg 已删；
-> 跨包重复代码已收进共享包 `dsh-warm-shared` 并迁移完消费方。
-> 静态 9 项 + 真机断言 + 热重载回归三项全绿，且**没有重启过 dsh web**（也不需要）。**
+> 跨包重复代码已收进共享包 `dsh-warm-shared` 并迁移完消费方；
+> 液态玻璃新增「流动层」——玻璃底下的内容持续轻微游动（Chromium 生效，Firefox 平台不支持，实测见 §0.3）。
+> 静态 11 项 + 真机断言 + 热重载回归全绿，且**没有重启过 dsh web**（也不需要）。**
 
 ## 0. 两条平台事实（都实测过，别再用旧说法）
 
@@ -21,8 +22,40 @@
    `invalid plugin … received object`，而且这个错会**拦住整个宿主启动** ——
    页面只剩「Failed to load plugins」，连会话都进不去。2026-09-19 在共享包上真踩过一次
    （entry id 随机、括号里是包名，就是那句报错）。现在由检查项「客户端插件形状」守着。
+3. **Gecko 完全不认 `backdrop-filter` 里的 SVG 滤镜，但认元素自身的 `filter: url(#…)`。**
+   2026-09-19 用 `tools/probes/engine-glass.js` 量的矩阵（同一张竖条纹，压玻璃那块
+   相对没压那块位移多少）：
+
+   | 滤镜挂在哪 | Chromium（无头 Edge） | Firefox 154（无头） |
+   | --- | --- | --- |
+   | `backdrop-filter: url(#…)` | feOffset **+12.00px** / feImage **−12.00px** / feTurbulence 打乱图案 | **三种配方全部 0px** |
+   | `filter: url(#…)`（元素自身） | 同上全有效 | 全部有效（`feImage` 必须写 `xlink:href`，只写 `href` 等于没有图源） |
+
+   推论（都已落地）："玻璃底下的东西被扭 / 在动"只在 Chromium 看得见；Firefox 唯一的
+   替代路是把带限位移挂在会话内容那个大元素上，实测每帧多花 ≥17ms
+   （`tools/probes/glass-cost.js`：中位帧 33ms → 50ms，而且只要挂着就付），**决定不做**。
 
 ## 1. 这一轮做了什么（可复核）
+
+**A. 本轮新增：液态玻璃的「流动层」（用户要的新功能）**
+
+要求原话：*"我希望玻璃下的文字会轻微扭曲并处于动态扭曲。在能看清字的前提下，
+扭曲程度也能让我明显看见在动态扭曲。"*
+
+- 做法：在折射之后叠一条 `feTurbulence` + `feDisplacementMap` 的**低频噪声位移**，
+  由一个 20fps 的定时器驱动它的 `baseFrequency`（变形）与 `scale`（呼吸）缓慢摆动，
+  两条摆动错相（`phaseStep`）——合起来才是"流动"而不是"心跳"。
+- 数字全在 `GLASS_WARP` 表（一行一个配方：`amp` 4.2px / `period` 9s / `fps` 20 /
+  `ampSwing` 0.6 / `freqSwing` 0.45）；全局幅度走 `GLASS_MATERIAL.warpAmp`，
+  阅读态按 `GLASS_CALM.scale.warpAmp`（0.35）折下去 —— 鼠标扫上来时它自己安静下来。
+- 三道门：`prefers-reduced-motion`、`localStorage['dsh-warm-x-glassWarp']`、
+  引擎表的 `warp` 列（契约 `glass.warp.engineSupport` 是对照表）。关掉时**不加任何原语**
+  → 与改动前逐像素相同。新检查项「动效门槛」逐条核对。
+- 为什么用噪声而不是再写一条正弦：`GLASS_LENS` 那几个形状是**屏幕坐标里的固定图案**，
+  要让它动就得按帧重建整张地图（`buildGlassMap` + `toDataURL`，这里最贵的一步）；
+  噪声是滤镜原语自己生成的，驱动它只要每拍改两个属性。
+
+**B. 上一轮的维护性改造（已完成态，细节见下面）**
 
 根因（都来自代码，不是猜测）：
 
@@ -44,15 +77,16 @@
 - 布局守卫只对自己带归属标记的节点动手，别人的节点**只报告**；
 - CSS 变量自检改成**逐表**（以前只扫增强表、跨表合并定义，基础表漏定义查不出来）。
 
-实测证据（真 Firefox，2026-09-19，本轮收尾那次）：
+实测证据（真 Firefox 1752×745 + 无头 Edge，2026-09-19 收尾那次）：
 
 | 项 | 结果 |
 | --- | --- |
-| 静态（`node tools/check.mjs`） | 9 项全绿 |
-| 真机断言（`--browser`，1752×745） | `chip` 态、行高 24、胶囊在、两根滑杆藏、卡片 952px、溢出 0、无主样式表 0、每个登记节点 1 个 |
+| 静态（`node tools/check.mjs`） | **11 项全绿**（新增「动效门槛」；探针 3 个） |
+| 真机断言（`--browser`，视口取自契约 `viewports.wide`） | `chip` 态、行高 24、胶囊在、两根滑杆藏、卡片 952px、溢出 0、无主样式表 0、每个登记节点 1 个；`engine: gecko` 且 `glassWarp: {noise: 0, displacement: 0}`（**引擎门槛真的生效**） |
 | 模块图谱（同一拍实测） | 有 `dsh-warm-shared`、没有 `dsh-warm-dynbg` |
 | 热重载回归（`--hmr`） | `rebuilt=2` 帧；每拍 `base/extra/wallpaper` 各 1 份、无主 0、画布 1、溢出 0 |
-| 参考截图 | `contract/refs/toolbar-chip-wide.png`、`contract/refs/toolbar-native-narrow.png`（我自己看过） |
+| 流动层（无头 Edge，两相位夹具差分） | 滤镜里 `feTurbulence` ×2、位移 ×2；驱动值确实在变；两时刻 平均像素差 **13.32**、5.2% 像素差>8、逐窗口位移 −2…+2px |
+| 参考截图 | `contract/refs/toolbar-chip-wide.png`、`toolbar-native-narrow.png`、`glass-warp-phase-a.png` / `-b.png`（都自己看过） |
 
 ## 2. 输入框在 plan 模式下变宽的结论（已实测，不是我们干的）
 
@@ -111,6 +145,20 @@ token 每次启动都会变，现取（**别写进仓库任何文件**）：
 WebGL 截图必须真 Firefox（无头 Chromium 的 WebGL 是死的）。窄屏用 `--width 1180`
 （`--width` 是 CSS 像素；插件的窄屏断点是 1240）。截图后**自己 `read_image` 看**。
 
+**流动层（只在 Chromium 看得见）另有一条**：把探针包成 `(async () => { … })()`，
+用 `_warmtheme_shots/cdp.mjs both` 跑两次（间隔几秒 = 两个相位），再差分截图：
+
+```bash
+{ printf '(async () => {\n'; cat probes/glass-warp.js; printf '\n})()\n'; } > tools/_tmp-wrap.js
+"/mnt/c/Program Files/nodejs/node.exe" 'D:\projects\_warmtheme_shots\cdp.mjs' both \
+  'D:\projects\dsh-warm-ui\tools\_tmp-wrap.js' 'D:\projects\dsh-warm-ui\tools\_tmp-a.png' --wait 5000
+# 再跑一次 --wait 11000 → _tmp-b.png，然后比这两张的夹具区域（40,40,860,140）
+```
+
+**为什么不在真实卡片上量**：卡片背后的会话内容两次加载之间自己就会变（实测会话区
+像素差 11.7，比玻璃区还大）；给它另铺底纹也不行 —— 卡片在 app 根的层叠上下文里，
+body 级注入的 z-index 压住的也是整棵 app，进不了卡片的 backdrop。
+
 ## 5. 必须守的不变量（`tools/check.mjs` 在守，别绕过）
 
 1. 每张样式表自带 `data-plugin` / `data-plugin-css`，且注入实现只有一份（共享包里）；
@@ -121,7 +169,11 @@ WebGL 截图必须真 Firefox（无头 Chromium 的 WebGL 是死的）。窄屏�
 6. 跨包依赖要在**三处**同时登记（代码 `require` + 本包 `package.json` 的 `dsh.client.external`
    + 契约的 `requires`），且消费方不得再抄一份注入三件套；
 7. `tools/probes/*.js` 是**函数体**（harness 塞进 async 箭头函数跑），`node --check` 对它们无效 ——
-   检查项「探针」按同一种包装提前解析。
+   检查项「探针」按同一种包装提前解析；
+8. **持续动效必须带三道门**：`prefers-reduced-motion`、单独开关（登记在 `EXTRA_DEFAULTS`）、
+   引擎表逐行表态；关掉时**不加原语**（= 与没有这一层逐像素相同）。数字只在契约里定一次；
+9. 真机断言的视口取自契约 `viewports.wide`（不然同一份断言会随窗口大小落到 `chip` 或 `native`，
+   "行高 24"那条时灵时不灵 —— 这是本轮顺手修的）。
 
 ## 6. 硬约束（违反了就是改崩）
 
@@ -138,4 +190,9 @@ WebGL 截图必须真 Firefox（无头 Chromium 的 WebGL 是死的）。窄屏�
 - 别用像素测量脚本做识别，直接用 `read_image` 看（我是识图模型）；
 - 先看现有代码约定再动手；单职责小函数；只给"非显然的为什么"写注释；本地化改动；
 - 交付时说清"哪些值被收进了哪张表"、以及哪些结论是**实测**的、哪些只是**推理**；
-- 回退点：`.snapshots/20260919-1230-pre-maintainability/`（本轮改动前的两个客户端包 + 宿主半边）。
+- **回退点（本轮 = 流动层开发前）**：
+  - 归档：`.snapshots/_archives/dsh-warm-ui-20260919-135358-pre-glass-distort.tar.gz`
+    （sha256 `d4a4a8f523e459de4084e848232a63ba1b1ea61a5fbc6517af958015649c317f`）；
+  - 目录快照：`.snapshots/20260919-135358-pre-glass-distort/`（含 `MANIFEST.sha256` 与两份 patch 副本）；
+  - git：基线提交 `f636fd2`、tag `pre-glass-distort`（`git switch --detach pre-glass-distort` 即回到改动前）。
+- 更早的回退点：`.snapshots/20260919-1230-pre-maintainability/`（维护性改造前的两个客户端包 + 宿主半边）。
