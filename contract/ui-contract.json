@@ -81,6 +81,27 @@
     "invariant": "卡片宽度 = 会话内容宽度 + 32；无偏好时内容宽度 = clamp(680, 列宽 * 0.64, 920)，有偏好时 = clamp(偏好, 640, 列宽 - 176)",
     "measuredAgainst": "dsh-client-ui-conversation/lib/client.js 的 WIDTH_PREF_KEY / resolveContentWidth / uV2eYG_card"
   },
+  "glass": {
+    "meaning": "液态玻璃：折射 + 边缘光 + 表面反射，外加一层随时间流动的位移（让静止时也看得出在动）",
+    "targets": [
+      "[data-slot=\"conversation.composer.bar\"] [class*=\"_card\"]",
+      "[data-slot=\"conversation.input.dock\"] [class*=\"_root\"]"
+    ],
+    "warp": {
+      "meaning": "流动层：叠一条随时间变化的低频噪声位移；幅度远小于折射，所以字仍清楚，但一直在缓慢游动",
+      "extraKey": "glassWarp",
+      "recipe": "ripple",
+      "amp": 4.2,
+      "period": 9,
+      "fps": 20,
+      "ampSwing": 0.6,
+      "freqSwing": 0.45,
+      "engineFlag": "warp",
+      "engineSupport": { "gecko": false, "chromium-webkit": true },
+      "offBehavior": "不给滤镜链加任何原语 —— 画面与没有这一层时逐像素相同（Firefox / reduce / 开关关掉都走这条）",
+      "reducedMotion": "prefers-reduced-motion: reduce 时驱动不写属性（滤镜保持建好时的静态值）"
+    }
+  },
   "invariants": {
     "documentOverflowPx": 0,
     "styleTagPerSheet": 1,
