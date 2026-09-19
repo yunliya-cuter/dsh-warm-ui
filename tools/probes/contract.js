@@ -132,6 +132,35 @@ for (const [pkg, spec] of Object.entries(C.packages)) {
   }
 }
 
+/* ── ⑨ 流动层的引擎门槛：这台引擎上"该不该有流动层"必须与契约一致 ─────────
+ *
+ * 契约的 `glass.warp.engineSupport` 给每条引擎配方一个 true/false，代码里
+ * `GLASS_BACKDROP_ENGINES` 的 `warp` 列照它写；静态检查核对"代码 == 契约"，
+ * 这里核对**运行时真的按它走了**：Gecko 上玻璃滤镜里不该出现 feTurbulence
+ * （引擎表说它吃不下 backdrop 里的 SVG 滤镜，加了也只是白算一遍）。
+ * 另外两半（Chromium 上确实有、以及它确实在动）由 Edge 侧的
+ * `tools/probes/glass-warp.js` 量 —— 文件头写了怎么跑。
+ */
+const glassSvg = document.querySelector("[data-wta-glass-svg]");
+const engineName = (() => {
+  try { return CSS.supports("-moz-appearance", "none") ? "gecko" : "chromium-webkit"; } catch { return "unknown"; }
+})();
+const warpSupport = ((C.glass || {}).warp || {}).engineSupport || {};
+const warpNoise = glassSvg ? glassSvg.querySelectorAll("feTurbulence").length : null;
+const warpDisp = glassSvg
+  ? [...glassSvg.querySelectorAll("feDisplacementMap")].filter((d) => d.getAttribute("in2") === "warpNoise").length
+  : null;
+if (glassSvg) {
+  const shouldBeOn = warpSupport[engineName] === true;
+  if ((warpNoise > 0) !== shouldBeOn) {
+    violations.push("流动层在 " + engineName + " 上的状态与契约不符：滤镜里 feTurbulence 有 " + warpNoise
+      + " 个，契约说" + (shouldBeOn ? "该开" : "该关"));
+  }
+  if (warpNoise !== warpDisp) {
+    violations.push("流动层的原语不成对（feTurbulence " + warpNoise + " / 位移 " + warpDisp + "）：噪声源接不上位移就等于白算");
+  }
+}
+
 return {
   measured: {
     state,
@@ -146,6 +175,8 @@ return {
     widthPref,
     defaultCap,
     bootIds,
+    engine: engineName,
+    glassWarp: { noise: warpNoise, displacement: warpDisp },
     viewport: window.innerWidth + "x" + window.innerHeight,
   },
   violations,

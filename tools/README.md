@@ -28,6 +28,7 @@ DSH_NODE_EXE="/mnt/c/Program Files/nodejs/node.exe" DSH_URL="http://127.0.0.1:30
 | 标记名 | 契约里的标记属性都在代码里出现（改名必须同步契约） |
 | 挂载入口 | 没有裸的 `document.body/head.append`（页面外层节点必须走 `mountDetached` / `mountLayer` / `installStyleSheet`） |
 | 变量闭包 | 每张样式表引用的 CSS 变量都在**本表内**有定义（否则整条声明会被复位成 initial） |
+| 动效门槛 | 持续动效带三道门：`prefers-reduced-motion`、开关（`EXTRA_DEFAULTS` 里的一行）、引擎表逐行表态；数字只在契约里定一次 |
 
 ## 2. 真机断言（需要 Windows 侧 Firefox）
 
@@ -59,6 +60,7 @@ node tools/check.mjs --browser
 | `probes/p0-ownership.js` | 快照式体检：把样式表/归属/壁纸/工具行/输入框一次量全（排查用，不做断言） |
 | `probes/p0-hmr.js` | 热重载回归：数 `/plugins/events` 的 rebuilt 帧 + 每 3 秒取一次样本（`--hmr` 就是用它） |
 | `probes/p0-composer.js` / `p0-composer-set.js` | 量/写 DSH 自己的会话宽度偏好（判断"输入框变宽"到底是谁干的） |
+| `probes/engine-glass.js` / `glass-cost.js` / `glass-warp.js` | 玻璃那两条路的引擎能力、替代路的帧成本、流动层是否真的在动（见第 5 节） |
 
 ## 3b. 重拍契约参考截图
 
@@ -92,13 +94,38 @@ sleep 3.5; printf '\n/* hmr-touch */\n' >> preview/wallpaper/lib/client.js
 **通过标准**：`rebuilt` 帧数 ≥ 1（证明真的热更了），且每一拍样本里
 `base / extra / wallpaper` 各为 1、`unownedStyleTags` 为 0、`canvases` 为 1、`overflow` 为 0。
 
-## 5. 契约在哪
+## 5. 玻璃：这个引擎能不能把"玻璃底下的东西"扭起来
+
+玻璃有两条实现路径，**这台引擎吃不吃**只能用真机量（`contract/ui-contract.md` 第 6 节有结论表）。
+两个探针各答一半：
+
+| 探针 | 回答什么 | 怎么跑 |
+| --- | --- | --- |
+| `probes/engine-glass.js` | 引擎能力矩阵：`backdrop-filter: url(#…)` 与 `filter: url(#…)`，配 `feOffset` / `feImage` / `feTurbulence` 三种配方，各自位移多少 | Firefox：`harness.mjs both <out.png> <probe>`（见第 2 节）；Chromium：`_warmtheme_shots/cdp.mjs both`（探针要先包成 `(async () => { … })()`） |
+| `probes/glass-cost.js` | "把带限位移挂在会话内容那个大元素上"这条替代路每帧要付多少（Gecko 专用） | 同 Firefox 的 `eval` |
+| `probes/glass-warp.js` | 流动层在这台引擎上**有没有真的在动**：滤镜里有没有那两个原语、驱动有没有改属性、帧时间 A/B；并把**插件自己那条滤镜**挂到自造的条纹夹具上，供像素差分 | Chromium（`cdp.mjs both`），**跑两次、间隔几秒**（相位不同） |
+
+读法（Chromium，夹具区域 `40,40,860,140`）：
+
+```bash
+# 两次截图之间：平均像素差 13.32、5.2% 的像素差 >8、逐窗口位移 −2…+2px = 真的在动
+node <像素差分脚本> _tmp-warp-a.png _tmp-warp-b.png 40,40,860,140
+```
+
+参考图：`contract/refs/glass-warp-phase-a.png` / `-b.png`（同一夹具的两个相位）。
+
+**为什么不在真实卡片上量**：卡片背后是会变的会话内容（两次加载之间它自己就变了，实测
+会话区像素差 11.7，比玻璃区还大）；想给它另铺一层底纹也不行 —— 卡片在 app 根的层叠
+上下文里，body 级注入的 z-index 再高压住的也是整棵 app，进不了卡片的 backdrop
+（实测：条纹盖住了卡片，条纹本身一点没被折射）。
+
+## 6. 契约在哪
 
 `contract/ui-contract.json` 是"UI 应该长什么样"的机器可读版本；`contract/ui-contract.md`
 是人读版。**改设计先改契约，再改代码** —— 契约变了，静态检查与真机断言会一起跟着变，
 不用去别处找回期望值。
 
-## 6. 硬约束（违反了就是改崩）
+## 7. 硬约束（违反了就是改崩）
 
 1. 不要重启、不要 kill 任何 `dsh web` 进程（agent 的 shell 是它的子进程）。
 2. 不要跑 `dsh --dump-config`（会重写 `cordis.yml`）。

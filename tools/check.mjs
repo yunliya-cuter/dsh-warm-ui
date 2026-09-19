@@ -21,6 +21,7 @@
  *   8. 契约数字  —— 契约里的设计数字与代码里的那一处定义相等
  *   9. 共享依赖  —— 契约里 requires 的包真的 require 了、清单里声明了 external、且没有自己再实现一遍
  *  10. 探针      —— tools/probes/*.js 按 harness 的包装能解析（它们是函数体，不是独立脚本）
+ *  11. 动效门槛  —— 持续动效必须能被 prefers-reduced-motion 与开关关掉、引擎表必须逐行表态、数字只在契约里定一次
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -282,6 +283,70 @@ function checkProbes() {
 	}
 }
 
+/* ── 11. 动态效果的门：系统设置能关、开关能关、引擎门槛明写、数字只有一处 ──
+ *
+ * 玻璃的流动层（GLASS_WARP）是**一直在跑**的东西：它每拍都要让浏览器重跑一遍滤镜链。
+ * 所以它必须带着几道门，而且每一道都能在代码里指出来：
+ *   ① prefers-reduced-motion —— 系统说"别动"就不动（壁纸那层也是这么做的）；
+ *   ② 开关 —— localStorage 一个键单独关掉（登记在 EXTRA_DEFAULTS 里，不是野键）；
+ *   ③ 引擎门槛 —— 每条引擎配方都要**明写**能不能做这一层，加引擎时被迫做一次决定；
+ *   ④ 数字只有一处 —— 契约里那几个数必须等于 GLASS_WARP 表里的值。
+ */
+function checkMotionGates() {
+	const spec = contract.packages["dsh-warm-ui"];
+	const glass = contract.glass;
+	if (!spec || !glass || !glass.warp) {
+		add("动效门槛", "契约里缺 glass.warp（玻璃流动层的开关/数字/引擎列都登记在这里）");
+		return;
+	}
+	const code = read(spec.entry);
+	if (!code.includes("prefers-reduced-motion")) {
+		add("动效门槛", spec.entry + " 里没有 prefers-reduced-motion —— 持续动效必须能被系统设置关掉");
+	}
+	if (!new RegExp("\\b" + glass.warp.extraKey + ":\\s*\\d").test(code)) {
+		add("动效门槛", "EXTRA_DEFAULTS 里没有 " + glass.warp.extraKey + " 这一行（流动层就没有单独的开关）");
+	}
+	/* 引擎表：每一行都要有 warp 字段（true/false 都行，但不能不表态），
+	   而且表态的结果必须等于契约里那一张"引擎 → 能不能做流动层"的表。 */
+	const engines = /const GLASS_BACKDROP_ENGINES = \[([\s\S]*?)\n\t\t\];/.exec(code);
+	if (!engines) {
+		add("动效门槛", "找不到 GLASS_BACKDROP_ENGINES 表");
+	} else {
+		const rows = [...engines[1].matchAll(/\bname:\s*"([^"]+)"([\s\S]*?)(?=\n\t\t\t\{|\n\t\t\];)/g)];
+		for (const row of rows) {
+			const [, name] = row;
+			const flag = new RegExp("\\b" + glass.warp.engineFlag + ":\\s*(true|false)").exec(row[2]);
+			if (!flag) {
+				add("动效门槛", "引擎配方 " + name + " 没写 " + glass.warp.engineFlag + "（每条配方都必须表态能不能做流动层）");
+				continue;
+			}
+			const want = glass.warp.engineSupport[name];
+			if (want === undefined) {
+				add("动效门槛", "契约的 glass.warp.engineSupport 里没有引擎 " + name + "（加引擎=加一行契约）");
+			} else if ((flag[1] === "true") !== want) {
+				add("动效门槛", "引擎 " + name + " 代码写 " + flag[1] + "，契约写 " + want);
+			}
+		}
+		if (!rows.length) add("动效门槛", "GLASS_BACKDROP_ENGINES 里一行都没解析出来（表结构变了？）");
+	}
+	/* 配方表：契约里的数 == 代码里的数（一处定义 = 一个含义）。 */
+	const recipe = new RegExp("\\b" + glass.warp.recipe + ":\\s*\\{([\\s\\S]*?)\\n\\s*\\},").exec(code);
+	if (!recipe) {
+		add("动效门槛", "GLASS_WARP 里找不到配方 " + glass.warp.recipe);
+	} else {
+		for (const key of ["amp", "period", "fps", "ampSwing", "freqSwing"]) {
+			const m = new RegExp("\\b" + key + ":\\s*([\\d.]+)").exec(recipe[1]);
+			const value = m ? Number(m[1]) : null;
+			if (value !== glass.warp[key]) {
+				add("动效门槛", "GLASS_WARP." + glass.warp.recipe + "." + key + " = " + value + "，契约写的是 " + glass.warp[key]);
+			}
+		}
+	}
+	if (!new RegExp('warp:\\s*"' + glass.warp.recipe + '"').test(code)) {
+		add("动效门槛", "GLASS_MATERIAL 没有引用配方 " + glass.warp.recipe + "（契约与代码不同步）");
+	}
+}
+
 /* ── 热重载回归（--hmr）：改一次文件 → 插件重建 → 再量一遍 ─────────────
  *
  * 为什么值得专门做一条命令：这一轮两个 bug（壁纸被推到页面下面、工具行变回原样）
@@ -316,6 +381,7 @@ async function runHmr(env) {
 		"eval",
 		env.windows(path.join(ROOT, "tools/probes/p0-hmr.js")),
 		"--port", env.port,
+		...viewportArgs(),
 		"--url", env.url,
 	], { encoding: "utf8" });
 	let out = "";
@@ -382,6 +448,20 @@ function browserEnv() {
 
 const C_UNOWNED = contract.invariants.unownedStyleTags;
 
+/**
+ * 真机断言的视口也取自契约（`viewports.wide`）。
+ * 以前只有 `shot` 那条命令记得传窗口尺寸，`--browser` 不传 —— 于是同一份断言
+ * 会随 Firefox 上次的窗口大小落到 `chip` 或 `native` 态，"行高 24" 那条时灵时不灵。
+ * 契约里既然写了参考视口，就该由它决定，而不是由窗口碰巧多大决定。
+ */
+function viewportArgs() {
+	const v = (contract.viewports || {}).wide || {};
+	const args = [];
+	if (v.width) args.push("--width", String(v.width));
+	if (v.height) args.push("--height", String(v.height));
+	return args;
+}
+
 function runBrowser(env) {
 	if (!env.url) return;
 	const args = [
@@ -389,6 +469,7 @@ function runBrowser(env) {
 		"eval",
 		env.windows(path.join(ROOT, "tools/probes/contract.js")),
 		"--port", env.port,
+		...viewportArgs(),
 		"--url", env.url,
 	];
 	const r = spawnSync(env.nodeExe, args, { encoding: "utf8" });
@@ -430,6 +511,7 @@ const checks = [
 	["契约数字", checkContractNumbers],
 	["共享依赖", checkRequires],
 	["探针", checkProbes],
+	["动效门槛", checkMotionGates],
 ];
 for (const [label, run] of checks) {
 	const before = findings.length;
