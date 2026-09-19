@@ -334,7 +334,7 @@ function checkMotionGates() {
 	if (!recipe) {
 		add("动效门槛", "GLASS_WARP 里找不到配方 " + glass.warp.recipe);
 	} else {
-		for (const key of ["amp", "period", "fps", "ampSwing", "freqSwing"]) {
+		for (const key of ["amp", "period", "fps", "ampSwing", "freqSwing", "fadeFactor"]) {
 			const m = new RegExp("\\b" + key + ":\\s*([\\d.]+)").exec(recipe[1]);
 			const value = m ? Number(m[1]) : null;
 			if (value !== glass.warp[key]) {

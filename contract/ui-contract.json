@@ -7,28 +7,58 @@
       "role": "shared",
       "entry": "preview/shared/lib/client.js",
       "manifest": "preview/shared/package.json",
-      "exports": ["createStyleInstaller", "cssPropertyName"],
+      "exports": [
+        "createStyleInstaller",
+        "cssPropertyName"
+      ],
       "styleSheets": [],
       "ownerKeys": [],
       "detachedOwnerKeys": [],
       "inLayoutOwnerKeys": [],
       "markers": [],
       "cssVarsFromJs": [],
-      "mountHelpers": ["installStyleSheet"]
+      "mountHelpers": [
+        "installStyleSheet"
+      ]
     },
     "dsh-warm-ui": {
       "role": "consumer",
       "entry": "lib/client.js",
       "manifest": "package.json",
-      "requires": ["dsh-warm-shared"],
-      "styleSheets": [
-        { "name": "base", "marker": "data-dsh-warm-ui", "cssTemplate": "STYLESHEET", "cssVarPrefix": "--wta-" },
-        { "name": "extra", "marker": "data-dsh-warm-extra", "cssTemplate": "EXTRA_STYLESHEET", "cssVarPrefix": "--wta-" }
+      "requires": [
+        "dsh-warm-shared"
       ],
-      "ownerKeys": ["glassSvg", "optimizerPop", "guardNote", "collapseChip"],
-      "detachedOwnerKeys": ["glassSvg", "optimizerPop", "guardNote"],
-      "inLayoutOwnerKeys": ["collapseChip"],
-      "onDemandOwnerKeys": ["guardNote"],
+      "styleSheets": [
+        {
+          "name": "base",
+          "marker": "data-dsh-warm-ui",
+          "cssTemplate": "STYLESHEET",
+          "cssVarPrefix": "--wta-"
+        },
+        {
+          "name": "extra",
+          "marker": "data-dsh-warm-extra",
+          "cssTemplate": "EXTRA_STYLESHEET",
+          "cssVarPrefix": "--wta-"
+        }
+      ],
+      "ownerKeys": [
+        "glassSvg",
+        "optimizerPop",
+        "guardNote",
+        "collapseChip"
+      ],
+      "detachedOwnerKeys": [
+        "glassSvg",
+        "optimizerPop",
+        "guardNote"
+      ],
+      "inLayoutOwnerKeys": [
+        "collapseChip"
+      ],
+      "onDemandOwnerKeys": [
+        "guardNote"
+      ],
       "markers": [
         "data-dsh-warm-owner",
         "data-dsh-warm-collapse",
@@ -38,19 +68,35 @@
         "data-dsh-warm-dpo",
         "data-dsh-warm-bold"
       ],
-      "cssVarsFromJs": ["--wta-glass-tint-cur"],
-      "mountHelpers": ["mountDetached", "installStyleSheet"]
+      "cssVarsFromJs": [
+        "--wta-glass-tint-cur"
+      ],
+      "mountHelpers": [
+        "mountDetached",
+        "installStyleSheet"
+      ]
     },
     "dsh-warm-wallpaper": {
       "role": "consumer",
       "entry": "preview/wallpaper/lib/client.js",
       "manifest": "preview/wallpaper/package.json",
-      "requires": ["dsh-warm-shared"],
-      "styleSheets": [
-        { "name": "base", "marker": "data-dsh-warm-wallpaper-style", "cssTemplate": "STYLESHEET", "cssVarPrefix": "--wlp-" }
+      "requires": [
+        "dsh-warm-shared"
       ],
-      "ownerKeys": ["layer"],
-      "detachedOwnerKeys": ["layer"],
+      "styleSheets": [
+        {
+          "name": "base",
+          "marker": "data-dsh-warm-wallpaper-style",
+          "cssTemplate": "STYLESHEET",
+          "cssVarPrefix": "--wlp-"
+        }
+      ],
+      "ownerKeys": [
+        "layer"
+      ],
+      "detachedOwnerKeys": [
+        "layer"
+      ],
       "inLayoutOwnerKeys": [],
       "markers": [
         "data-dsh-warm-owner",
@@ -58,14 +104,24 @@
         "data-dsh-warm-wallpaper"
       ],
       "cssVarsFromJs": [],
-      "mountHelpers": ["mountLayer", "installStyleSheet"]
+      "mountHelpers": [
+        "mountLayer",
+        "installStyleSheet"
+      ]
     }
   },
   "toolbar": {
     "stateAttribute": "data-dsh-warm-dpo",
-    "states": ["chip", "native", "fallback"],
+    "states": [
+      "chip",
+      "native",
+      "fallback"
+    ],
     "rowHeightPx": 24,
-    "rowHeightVar": { "package": "dsh-warm-ui", "name": "--wta-ctl-h" },
+    "rowHeightVar": {
+      "package": "dsh-warm-ui",
+      "name": "--wta-ctl-h"
+    },
     "meaning": {
       "chip": "宽屏：我们的「优化」胶囊在、插件两根滑杆都藏起来",
       "native": "窄屏：插件自己的档位胶囊在、权限滑杆藏起来、我们的胶囊不在",
@@ -97,9 +153,14 @@
       "ampSwing": 0.6,
       "freqSwing": 0.45,
       "engineFlag": "warp",
-      "engineSupport": { "gecko": false, "chromium-webkit": true },
+      "engineSupport": {
+        "gecko": false,
+        "chromium-webkit": true
+      },
       "offBehavior": "不给滤镜链加任何原语 —— 画面与没有这一层时逐像素相同（Firefox / reduce / 开关关掉都走这条）",
-      "reducedMotion": "prefers-reduced-motion: reduce 时驱动不写属性（滤镜保持建好时的静态值）"
+      "reducedMotion": "prefers-reduced-motion: reduce 时驱动不写属性（滤镜保持建好时的静态值）",
+      "fadeFactor": 2.5,
+      "edgeMask": "框边一圈不加噪声：遮罩按几何生成（框边 0、离框 max(bevel, amp×fadeFactor) 以内 1），否则双向噪声会采到元素框外、把那一条背景拉成条纹"
     }
   },
   "invariants": {
@@ -109,7 +170,15 @@
     "unownedStyleTags": 0
   },
   "viewports": {
-    "ref": { "width": 1280, "height": 560, "dpr": 1.2 },
-    "wide": { "width": 1752, "height": 830, "dpr": 1.2 }
+    "ref": {
+      "width": 1280,
+      "height": 560,
+      "dpr": 1.2
+    },
+    "wide": {
+      "width": 1752,
+      "height": 830,
+      "dpr": 1.2
+    }
   }
 }

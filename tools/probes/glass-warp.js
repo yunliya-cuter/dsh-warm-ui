@@ -16,17 +16,19 @@ for (const old of document.querySelectorAll("[" + TAG + "]")) old.remove();
 const WARP_KEY = "dsh-warm-x-glassWarp";
 const glassSvg = document.querySelector("[data-wta-glass-svg]");
 const filters = glassSvg ? Array.from(glassSvg.querySelectorAll("filter")) : [];
-/* 流动层的两颗原语按**结构**认（紧跟在 feTurbulence 后面的位移），不按结果名认 ——
-   结果名是插件内部的名字，探针抄一份就等于把同一个含义写两遍。 */
-const warpNodes = glassSvg
-	? Array.from(glassSvg.querySelectorAll("feDisplacementMap")).filter((d) => {
-		const prev = d.previousElementSibling;
-		return prev && prev.tagName === "feTurbulence";
-	})
+/* 流动层的原语按**结构**认：在同一个滤镜里，**排在 feTurbulence 之后**的位移就是
+   流动层那一次（静态折射的位移排在它前面）。不按结果名认 —— 结果名是插件内部的名字，
+   探针抄一份就等于把同一个含义写两遍。 */
+const warpPairs = glassSvg
+	? Array.from(glassSvg.querySelectorAll("filter")).map((f) => {
+		const kids = Array.from(f.children);
+		const first = kids.findIndex((n) => n.tagName === "feTurbulence");
+		if (first < 0) return { noise: null, disp: [] };
+		return { noise: kids[first], disp: kids.slice(first).filter((n) => n.tagName === "feDisplacementMap") };
+	}).filter((pair) => pair.noise)
 	: [];
-const noiseNodes = warpNodes
-	.map((d) => d.previousElementSibling)
-	.filter(Boolean);
+const noiseNodes = warpPairs.map((pair) => pair.noise);
+const warpNodes = warpPairs.flatMap((pair) => pair.disp);
 
 /* 玻璃元素按"我们自己写上去的那条内联 backdrop-filter"找：卡片本身没有 data-slot
    （data-slot 在它的祖先上），所以不去抄一份选择器，也不假设 DSH 的 DOM 结构。
@@ -102,10 +104,15 @@ const srcFilter = filters.find((f) => f.id.endsWith("-full"));
 const FIXTURE = { x: 24, y: 24, w: 900, h: 140 };
 let fixtureRect = null;
 if (srcFilter) {
+	/* 底纹用**棋盘**而不是竖条纹：竖条纹在 y 方向是常量，"采样被夹到框边"这种
+	   竖直方向的涂抹在它上面**根本看不出来**（像素差会照样是 0 或很小），
+	   而真实会话文字是二维内容 —— 用户看到的正是文字被拉成条纹。棋盘两个方向都变，
+	   涂抹会在图上表现为方格被拉长。 */
 	const fixture = document.createElement("div");
 	fixture.setAttribute(TAG, "");
-	fixture.style.cssText = "position:fixed;z-index:2147483000;background-color:#000;"
-		+ "background-image:repeating-linear-gradient(90deg,#000 0 24px,#fff 24px 48px);"
+	fixture.style.cssText = "position:fixed;z-index:2147483000;background-color:#fff;"
+		+ "background-image:conic-gradient(#fff 0 25%,#000 0 50%,#fff 0 75%,#000 0);"
+		+ "background-size:48px 48px;"
 		+ "left:" + FIXTURE.x + "px;top:" + FIXTURE.y + "px;width:" + FIXTURE.w + "px;height:" + FIXTURE.h + "px";
 	const lens = document.createElement("div");
 	lens.setAttribute(TAG, "");
