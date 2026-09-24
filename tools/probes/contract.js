@@ -164,6 +164,21 @@ const chipsMarked = count("[data-dsh-warm-collapse]");
 if (chipsByClass !== 1) violations.push("工具行里 .wti-chip 有 " + chipsByClass + " 颗，只该有一颗");
 if (chipsMarked !== 1) violations.push("带归属标记的胶囊有 " + chipsMarked + " 颗，只该有一颗");
 
+/* ── ⑩ 玻璃的生死出口 ─────────────────────────────────────────────────────
+ *
+ * 契约 lifecycle 说换代守卫与自我卸载都是 enforced，那运行时就必须能**问**出来：
+ * window.__dshWarmExtra.glass 报 { alive, generation }（出错时附 error）。
+ * 这是「玻璃悄悄死了、页面只是看起来还行」这类故障唯一的自动判据 ——
+ * 没有出口的时候，用户 2026-09-24 那次闪烁只能靠肉眼看出来。
+ */
+const lifeState = (((C.lifecycle || {}).singleGeneration) || {}).state || null;
+const glassLife = (window.__dshWarmExtra && window.__dshWarmExtra.glass) || null;
+if (lifeState === "enforced") {
+  if (!glassLife) violations.push("契约说换代守卫是 enforced，但 window.__dshWarmExtra.glass 不存在（玻璃没有可观测出口）");
+  else if (glassLife.alive !== true) violations.push("玻璃出口报 alive=" + glassLife.alive + "，页面刚加载完不该是死的（error：" + (glassLife.error || "无") + "）");
+  else if (!(glassLife.generation >= 1)) violations.push("玻璃出口报 generation=" + glassLife.generation + "，应当 >= 1");
+}
+
 return {
   measured: {
     state,
@@ -181,6 +196,7 @@ return {
     engine: engineName,
     glassMotion: { state: motionState, noise: noisePrims, flowDisplacement: flowDisps, bodyFlag: flowFlag },
     chips: { byClass: chipsByClass, marked: chipsMarked },
+    glassLife: glassLife ? { alive: glassLife.alive, generation: glassLife.generation } : null,
     viewport: window.innerWidth + "x" + window.innerHeight,
   },
   violations,

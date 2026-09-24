@@ -159,6 +159,31 @@
       "measured": "同一张卡片两相位差分（1752×830，Chromium）：壁纸开着时上沿带 5.73；把流动层驱动冻住后仍有 5.43；把壁纸那层藏掉后只剩 0.23。即卡片边缘的「动」绝大部分来自会动的壁纸透过玻璃，玻璃自身那点动才是被删掉的流动层 —— 删掉后壁纸那部分照旧可见（那是壁纸本身，不是玻璃的动效）。"
     }
   },
+  "lifecycle": {
+    "meaning": "插件实例的生死规矩。热重载换掉的是**模块实例**：旧实例的 pointermove 监听、rAF、MutationObserver 都还在跑，而它的代码已经过期。所以「现在活着的是第几代」记在模块变量里是错的 —— 新模块从 0 开始数，两代互不认识。只有最新一代允许写页面；出事的那一代要能自我卸载，而不是每帧抛一次错。",
+    "singleGeneration": {
+      "state": "enforced",
+      "meaning": "换代计数器挂在 window（GENERATION_KEYS：__dshWarmGenGlass / __dshWarmGenChip），generationOf / beginGeneration / endGeneration 是唯一定义处。玻璃与工具行胶囊在写页面前先问 generationOf(name)，不是最新一代就立刻停手 —— 否则两代会互相删插/互相覆盖，用户看到的就是「输入框经常闪烁」（2026-09-24）。",
+      "codeGuards": [
+        "模块作用域里不得再出现换代变量（如 chipGeneration），号码只能存 window",
+        "mountGlass 的 sync() 与工具行 step() 的第一句必须是换代守卫",
+        "新的一代挂载时要清掉上一代留下的同类节点（sweepOptimizerChips / sweepOwned）"
+      ],
+      "measured": "tools/probes/glass-zombie.js：假 loader + 假 ctx 连挂两代（effect 不给卸载），在输入卡片上打 120 发指针风暴。改前合计 2233 次 DOM 变更，其中 868 条是 .wti-chip 节点的删插；只加换代守卫后降到 79；全套改完 71 次且**全部落在挂载那一瞬**，静置段 0、继续静置段 0；单实例基线 5 次。"
+    },
+    "failSafe": {
+      "state": "enforced",
+      "meaning": "玻璃的 sync() 是指针热路径：出错必须自我卸载（幂等 remove + 只报一次的 reportGlassFailure），页面回到「没有玻璃但能用」；mountExtras 装到一半抛出去也要能收拾干净。",
+      "codeGuards": [
+        "sync() 必须 try/catch，catch 里 remove() + reportGlassFailure()",
+        "remove() 必须幂等（dead 标记）",
+        "mountExtras 必须先定义好 dispose 再跑 paintExtraFlags / mountGlass / 第一次 sync",
+        "window.__dshWarmExtra.glass 必须报 { alive, generation }，出错时附 error"
+      ],
+      "measured": "tools/probes/glass-zombie.js 把 document.elementFromPoint 换成必抛：改前 59 个未捕获错误、0 条 console.error、没有任何可观测出口；改后 0 个未捕获错误、恰好 1 条 console.error（文案带「已自我卸载」）、window.__dshWarmExtra.glass = { alive: false, generation: 3, error: … }，工具行仍是 1 颗胶囊、卡片仍可用。"
+    },
+    "measured": "用户侧现场（2026-09-24）：修复前他们那一页 5 秒里 1284 次 DOM 变更（三份半删状态的 rev 同时活着，每次鼠标移动都抛错）；同一个探测器在**全新加载**的页面上是 0 次。半删状态由 tools/check.mjs 第 11 项（已删标识符表）拦。"
+  },
   "invariants": {
     "documentOverflowPx": 0,
     "styleTagPerSheet": 1,

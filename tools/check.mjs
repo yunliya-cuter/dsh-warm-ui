@@ -22,6 +22,7 @@
  *   9. 共享依赖  —— 契约里 requires 的包真的 require 了、清单里声明了 external、且没有自己再实现一遍
  *  10. 探针      —— tools/probes/*.js 按 harness 的包装能解析（它们是函数体，不是独立脚本）
  *  11. 玻璃无动效 —— 契约说 glass.motion.state = none 时，代码里不许再出现流动层的配方/原语/开关
+ *                     （按"已删标识符表"逐个查，半删状态也算红）
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -287,11 +288,34 @@ function checkProbes() {
  *
  * 2026-09-24 按用户要求把玻璃的「流动层」（噪声位移 + 定时驱动）整层删掉了
  * （用户报的是「输入框边缘波纹动效」，要的是"直接去掉"）。这一条守两件事：
- *   ① 删干净 —— 契约 `glass.motion.state = "none"` 时，代码里不许再出现
- *      GLASS_WARP / feTurbulence / glassWarp 这三样里的任何一样；
+ *   ① 删干净 —— 契约 `glass.motion.state = "none"` 时，代码里不许再出现下面表里
+ *      任何一个名字；
  *   ② 想加回来必须先改契约 —— 这条只核对"声明与实现一致"，契约改了它就放行，
  *      所以它拦的是"偷偷把动效加回来"。
+ *
+ * 为什么表要列到这一点点：这一层删除过程中出现过三次**半删状态**存盘 ——
+ * 文件语法没问题（`node --check` 全过），但运行中的插件在 pointermove 里抛
+ * `GLASS_WARP is not defined` / `glassWarpOf is not defined`，热重载留下的旧实例
+ * 每动一下鼠标就抛一次，用户看到的就是「输入框经常闪烁」（复核见 STATE.md §0.5）。
+ * 语法检查拦不住半删状态，只有"已删标识符表"拦得住。
  */
+const GLASS_MOTION_LEFTOVERS = [
+	["配方表", "GLASS_WARP"],
+	["配方读取", "glassWarpOf"],
+	["位移场采样", "warpAt"],
+	["滤镜节点装配", "warpFilterNodes"],
+	["噪声滤镜 id", "warpNoise"],
+	["位移图掩码", "warpMask"],
+	["位移场缓存", "warpField"],
+	["掩码 url", "maskUrl"],
+	["定时器句柄", "warpTimer"],
+	["起始时间戳", "warpStartedAt"],
+	["逐帧驱动", "tickWarp"],
+	["帧调度", "scheduleWarp"],
+	["开关读取", "glassWarp"],
+	["开关标记", "data-wta-glasswarp"],
+	["噪声原语", "feTurbulence"],
+];
 function checkGlassMotion() {
 	const spec = contract.packages["dsh-warm-ui"];
 	const glass = contract.glass;
@@ -301,11 +325,9 @@ function checkGlassMotion() {
 	}
 	if (glass.motion.state !== "none") return;
 	const code = read(spec.entry);
-	const leftovers = [
-		["流动层配方表 GLASS_WARP", /GLASS_WARP/],
-		["噪声原语 feTurbulence", /feTurbulence/],
-		["开关 glassWarp", /\bglassWarp\b/],
-	].filter(([, re]) => re.test(code)).map(([name]) => name);
+	const leftovers = GLASS_MOTION_LEFTOVERS
+		.filter(([, name]) => new RegExp("\\b" + name + "\\b").test(code))
+		.map(([what, name]) => what + "（" + name + "）");
 	if (leftovers.length) {
 		add("玻璃无动效", spec.entry + " 里还留着 " + leftovers.join("、")
 			+ " —— 契约写的是 glass.motion.state = none（删干净或先改契约）");
