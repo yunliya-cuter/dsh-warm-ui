@@ -61,6 +61,7 @@ node tools/check.mjs --browser
 | `probes/p0-hmr.js` | 热重载回归：数 `/plugins/events` 的 rebuilt 帧 + 每 3 秒取一次样本（`--hmr` 就是用它） |
 | `probes/p0-composer.js` / `p0-composer-set.js` | 量/写 DSH 自己的会话宽度偏好（判断"输入框变宽"到底是谁干的） |
 | `probes/engine-glass.js` / `glass-cost.js` | 玻璃的引擎能力矩阵、以及「给 Gecko 补元素级滤镜」这条替代路每帧要付多少（见第 5 节） |
+| `probes/dup-chip.js` | 重复胶囊回归：往 `.dpo-controls` 塞一颗**没有归属标记**的同类节点（= 旧版本遗留），每 250ms 数一次 `.wti-chip` —— 应当只在注入那一拍是 2，随后恒为 1 | Firefox：`harness.mjs eval`；Chromium：`cdp.mjs both`（先包成 `(async () => { … })()`） |
 
 ## 3b. 重拍契约参考截图
 
