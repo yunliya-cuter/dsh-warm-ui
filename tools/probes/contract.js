@@ -268,6 +268,95 @@ if (card && pointerState === "enforced") {
   await settle();
 }
 
+/* ── ⑬ 进行中指示：两种黑带都没了 + 运行条目上有点与水波 ─────────────────
+ *
+ * 用户 2026-09-25 报「与背景不协调的黑色横带」。代码里两种暗带（座位全宽渐隐带 + 五族行内扫光）
+ * 都已按用户要求移除，改成「行首闪烁橙点 + 文字水波」。这一项在真机里断言三件事：
+ *   ① 座位的计算样式里**没有**任何背景画法（黑带不许回来，不管哪个相位）；
+ *   ② 运行中的条目前缀有点：8px 圆、颜色不是透明、带闪烁动画（外加绝对定位 = 不吃排版）；
+ *   ③ 扫光确实关掉（::after content = none）、文字水波在跑且摘要与标题有相位差。
+ * 为什么可以造一个 data-state="running" 的探针节点：插件的规则只看属性（[data-state="running"]、
+ * 类名后缀 _row/_title/_summary），不看是不是 React 渲染的；真机像素证据（橙色团块落在
+ * 行首外挂位置、零位移）在 .edge-preview/_evidence-band.md 里另存。
+ */
+const busySpec = C.busy || {};
+let busyProbe = null;
+if (busySpec.state === "enforced") {
+  busyProbe = {};
+  const seat = document.querySelector('[class*="composerSeat"]');
+  busyProbe.seatBg = seat ? getComputedStyle(seat).backgroundImage : "no-seat";
+  if (seat && busyProbe.seatBg !== "none") {
+    violations.push("输入区座位还在画底（background-image = " + busyProbe.seatBg + "）—— 契约 busy.seatBackground 是 none，那条全宽渐隐带就是用户报的黑色横带");
+  }
+  const stage = document.createElement("div");
+  stage.id = "wta-busy-probe";
+  stage.style.cssText = "position:fixed;left:-9999px;top:0;width:400px";
+  const root = document.createElement("div");
+  root.setAttribute("data-state", "running");
+  root.setAttribute("data-tool", "probe");
+  const row = document.createElement("div");
+  row.className = "probe_row";
+  const title = document.createElement("span");
+  title.className = "probe_title";
+  title.textContent = "进行中";
+  const summary = document.createElement("span");
+  summary.className = "probe_summary";
+  summary.textContent = "probe";
+  row.append(title, summary);
+  root.appendChild(row);
+  stage.appendChild(root);
+  document.body.appendChild(stage);
+  await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+
+  const dot = getComputedStyle(root, "::before");
+  const wantDot = busySpec.dot || {};
+  busyProbe.dot = {
+    content: dot.content, w: dot.width, h: dot.height, radius: dot.borderRadius, bg: dot.backgroundColor,
+    left: dot.left, top: dot.top, position: dot.position, anim: dot.animationName,
+    dur: dot.animationDuration, iter: dot.animationIterationCount, dir: dot.animationDirection, op: dot.opacity,
+  };
+  if (dot.content === "none") {
+    violations.push("运行中的条目行首没有点（::before content 是 none）—— 契约 busy.dot 要求它在那里");
+  }
+  if (wantDot.size && (dot.width !== wantDot.size || dot.height !== wantDot.size)) {
+    violations.push("点的尺寸是 " + dot.width + "×" + dot.height + "，契约写的是 " + wantDot.size);
+  }
+  if (dot.backgroundColor === "rgba(0, 0, 0, 0)") {
+    violations.push("点的颜色是透明的 —— 这是「颜色变量写回了 :root」的典型症状：DSH 的语义 token 只定义在 body 上，:root 里 var() 链失效会让整条 background 作废");
+  }
+  if (dot.position !== "absolute") {
+    violations.push("点不是绝对定位（position = " + dot.position + "）—— 那会参与排版、把行内文字挤动");
+  }
+  if (wantDot.blink && dot.animationName !== wantDot.blink.keyframes) {
+    violations.push("点的动画是 " + dot.animationName + "，契约写的是 " + wantDot.blink.keyframes);
+  }
+  const after = getComputedStyle(row, "::after");
+  busyProbe.sweep = { content: after.content, anim: after.animationName };
+  if (after.content !== "none") {
+    violations.push("行内扫光还在（::after content = " + after.content + "）—— 契约 busy.sweep 是 off，那条 300px 中性黑块会被读成黑色横带");
+  }
+  const tw = getComputedStyle(title);
+  const sw = getComputedStyle(summary);
+  busyProbe.wave = {
+    title: { anim: tw.animationName, dur: tw.animationDuration, transform: tw.transform },
+    summary: { anim: sw.animationName, dur: sw.animationDuration, delay: sw.animationDelay },
+  };
+  if (busySpec.wave && tw.animationName !== busySpec.wave.keyframes) {
+    violations.push("标题的水波动画是 " + tw.animationName + "，契约写的是 " + busySpec.wave.keyframes);
+  }
+  if (busySpec.wave && tw.animationDuration !== busySpec.wave.duration) {
+    violations.push("水波周期是 " + tw.animationDuration + "，契约写的是 " + busySpec.wave.duration + "（用户要求与原扫光同频）");
+  }
+  if (busySpec.wave && sw.animationDelay === "0s") {
+    violations.push("摘要与标题同相位（animation-delay = 0s）—— 那样看不出「波」在走，只像整行一起抖");
+  }
+  busyProbe.reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!busyProbe.reducedMotion && dot.animationName === "none") {
+    violations.push("系统没开「减少动态效果」，点的闪烁却是 none —— 动画没生效");
+  }
+  stage.remove();
+}
+
 return {
   measured: {
     state,
@@ -288,6 +377,7 @@ return {
     glassLife: glassLife ? { alive: glassLife.alive, generation: glassLife.generation } : null,
     glassArc: { insets: arcInsets, radius: arcRadius, tint: idleTint },
     glassHover: hoverProbe,
+    busyIndicator: busyProbe,
     viewport: window.innerWidth + "x" + window.innerHeight,
   },
   violations,

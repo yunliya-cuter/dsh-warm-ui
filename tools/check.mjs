@@ -28,6 +28,9 @@
  *  13. 悬停判定 —— 契约 glass.pointer 在代码里成立：真离开只认 documentElement 上的
  *                   pointerleave；窗口失焦走独立处理器、只丢命中缓存并按最后的坐标重算
  *                   （**失焦不许当成指针离开**，那正是用户报的"鼠标在输入框上打字却变透明"）
+ *  14. 进行中指示 —— 契约 busy 在代码里成立：座位不再画全宽渐隐带、五族行内扫光全关、
+ *                   点的颜色只有一处定义且**不许写回 :root**（那一层取不到 --dsw-* 语义
+ *                   token，var() 链失效会让整条 background 作废 ⇒ 点画出来是透明的，实测过）
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -634,6 +637,71 @@ if ((wantsBrowser || wantsHmr) && !env.url) {
 /* 自愈先做：上一次 --hmr 被中断的残留要清掉，否则后面所有检查都建立在脏文件上。 */
 stripHmrMarkers();
 
+/* ── 14. 进行中指示（契约 busy）──────────────────────────────────────── */
+/**
+ * 「进行中」长什么样是登记过的事实：两种暗带都要没、点只有一处定义、节奏数字与契约相等。
+ * 这里只查**能静态查的**（选择器/定义次数/数字）；真机行为在 tools/probes/contract.js ⑬。
+ */
+function checkBusyIndicator() {
+	const spec = contract.packages["dsh-warm-ui"];
+	const b = contract.busy;
+	if (!spec || !b) {
+		add("进行中指示", "契约里缺 busy（「进行中」用什么表示、两种暗带怎么去掉，必须是一条登记过的事实）");
+		return;
+	}
+	const code = read(spec.entry);
+	for (const needle of b.must || []) {
+		if (!code.includes(needle)) {
+			add("进行中指示", spec.entry + " 里找不到 " + JSON.stringify(needle) + "（契约 busy.must 登记过）");
+		}
+	}
+	for (const needle of b.forbidden || []) {
+		if (code.includes(needle)) {
+			add("进行中指示", spec.entry + " 里还有 " + JSON.stringify(needle)
+				+ " —— 那是被移除的暗带留下的写法（契约 busy.forbidden：黑带不许回来）");
+		}
+	}
+	/* 一处定义，而且作用域必须是 body —— :root 里引用 --dsw-* 会失效（实测点变透明）。 */
+	const dot = b.dot || {};
+	if (dot.colorVar) {
+		const inRoot = code.split("\n  " + dot.colorVar + ":").length - 1;
+		if (inRoot !== 0) {
+			add("进行中指示", dot.colorVar + " 又出现在 :root 的 2 空格缩进里（" + inRoot + " 处）—— "
+				+ "DSH 的语义 token 只定义在 body 上，这一层 var() 链会失效、整条 background 作废，点会变成透明的");
+		}
+		const scoped = code.split('body[data-wta-busy="1"] { ' + dot.colorVar + ":").length - 1;
+		if (scoped !== 1) {
+			add("进行中指示", spec.entry + " 里 " + dot.colorVar + " 的 body 作用域定义出现 " + scoped + " 次（应恰好一次：一处定义 = 一个含义）");
+		}
+	}
+	if (dot.colorToken) {
+		const n = code.split(dot.colorToken).length - 1;
+		if (n !== 1) {
+			add("进行中指示", "点色 token " + dot.colorToken + " 在 " + spec.entry + " 里出现 " + n + " 次（应恰好一次：换色只改这一行）");
+		}
+	}
+	/* 设计数字：契约登记的节奏必须等于代码里那一处定义 */
+	const norm = (v) => (v !== undefined && v !== "" && !Number.isNaN(Number(v)) ? String(Number(v)) : v);
+	const nums = [
+		["--wta-busy-blink-dur", dot.blink && dot.blink.duration],
+		["--wta-busy-blink-min", dot.blink && dot.blink.opacityMin],
+		[(b.wave || {}).durationVar, (b.wave || {}).duration],
+		[(b.wave || {}).amplitudeVar, (b.wave || {}).amplitude],
+	];
+	for (const [name, want] of nums) {
+		if (!name || want === undefined) continue;
+		const line = code.split("\n").find((l) => l.trim().startsWith(name + ":"));
+		if (!line) {
+			add("进行中指示", "代码里找不到 " + name + " 的定义（契约 busy 登记了它）");
+			continue;
+		}
+		const got = line.slice(line.indexOf(":") + 1).trim().replace(/;$/, "");
+		if (norm(got) !== norm(want)) {
+			add("进行中指示", name + " 代码里是 " + got + "，契约写的是 " + want + "（改设计要改契约，别只改一边）");
+		}
+	}
+}
+
 const checks = [
 	["语法", checkSyntax],
 	["样式归属", checkStyleOwnership],
@@ -647,6 +715,7 @@ const checks = [
 	["玻璃无动效", checkGlassMotion],
 	["底部曲率", checkGlassCurvature],
 	["悬停判定", checkGlassPointer],
+	["进行中指示", checkBusyIndicator],
 ];
 for (const [label, run] of checks) {
 	const before = findings.length;

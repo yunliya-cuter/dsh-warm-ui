@@ -237,6 +237,49 @@
       "measured": "参照对比（同一水平带、同一张截图）：卡外未滤波壁纸 busy 3.85 / spread 53.6，卡内打字区 busy 1.235 / spread 39.0 —— 玻璃已经把背景乱度压掉约 2/3，剩下那点背景结构是壁纸本身、不是折射造成的。所以这一版**没有动底色**：加 tint 只会牺牲透明度而换不到可测的可读性提升。"
     }
   },
+  "busy": {
+    "state": "enforced",
+    "meaning": "「进行中」只由两件与主题一致的东西表示：运行条目行首一颗闪烁的橙点 + 条目文字按水波节奏起伏（周期与原扫光一致）。原来界面上那两种暗带全部移除：① 输入区座位的全宽渐隐带（实测 1310×172px 暖黑 rgba(16,14,12)，顶 54px 斜坡到 .46）② DSH 五族行内扫光（实测 300px 宽的中性黑 color(srgb .078 .078 .078 / .6) = #141414@60%，每 2.6s 扫过一次）。锚点只用一条属性：data-state=\"running\" 是 DSH 自己给「运行中」条目的标记（DSH 自己写了三个包的各一条），类名带 CSS Module 哈希前缀，属性活得比哈希久。",
+    "seatBackground": "none",
+    "dot": {
+      "selector": "[data-state=\"running\"]::before",
+      "colorVar": "--wta-busy-dot",
+      "colorToken": "--dsw-alias-state-warn-primary",
+      "colorScope": "body",
+      "size": "8px",
+      "outDent": "12px",
+      "blink": { "keyframes": "wta-busy-blink", "duration": "1s", "easing": "ease-in-out", "iteration": "infinite", "direction": "alternate", "opacityMin": 0.35 }
+    },
+    "wave": { "keyframes": "wta-busy-wave", "duration": "2.6s", "amplitude": "1px", "delayFraction": "-1/6", "durationVar": "--wta-busy-wave-dur", "amplitudeVar": "--wta-busy-wave-amp", "targets": ["_title", "_summary"] },
+    "sweep": "off",
+    "reducedMotion": "静态橙点（opacity 1）+ 文字静止；行内摘要仍写着在做什么，所以「进行中」照样看得见",
+    "knownExceptions": [
+      "bash 样例行（CY-8Ka_root）的 data-state 与 overflow:hidden 在**同一个元素**上：它原来裁的是那条扫光（300px、从 left:-300px 扫进来），扫光整条关掉之后这层裁剪再没有存在理由，却会把行首的点一起裁掉。真机实测「跑 bash 的 sleep 时这一行就是顶层条目」（data-state=running 的元素只有它一个），所以放开 overflow:visible —— 不碰 padding / 间隙 / 尺寸（零位移），对其他族是无操作（实测它们的 root 本来就是 visible）",
+      "流式正文 / 重试行[data-active] / 等待确认 不带 data-state，不在这一族里（本轮不动，想扩要单独走一轮）"
+    ],
+    "must": [
+      "body[data-wta-busy=\"1\"] [data-state=\"running\"] [class*=\"_row\"]::after",
+      "body[data-wta-busy=\"1\"] [data-state=\"running\"][class*=\"_root\"]::after",
+      "content: none !important;",
+      "body[data-wta-busy=\"1\"] { --wta-busy-dot: var(--dsw-alias-state-warn-primary); }",
+      "background: none !important;",
+      "body[data-wta-busy=\"1\"] [data-state=\"running\"][class*=\"_root\"] { overflow: visible; }",
+      "--wta-busy-wave-dur: 2.6s;",
+      "--wta-busy-blink-min: .35;",
+      "@keyframes wta-busy-blink",
+      "@keyframes wta-busy-wave",
+      "@media (prefers-reduced-motion: reduce)"
+    ],
+    "forbidden": [
+      "--wta-seat-top",
+      "--wta-seat-mid",
+      "--wta-seat-bot",
+      "--wta-seat-mid-at",
+      "rgba(16, 14, 12, .20)",
+      "rgba(16, 14, 12, .46)"
+    ],
+    "measured": "无头 Chromium（1600×900、DPR 1）+ 真机同页面 A/B。① 归属：座位带（ab2-before→ab2-seat-off）座位区 28.73→30.33 Δ+1.60、卡外左侧 18.78→20.84 Δ+2.06、正文区 Δ+0.01（无副作用）；扫光（测台 on→off）测台区 47.26→49.31 Δ+2.05、工具行最暗 300px 窗口 +3.17（≈11%）。② 改造后（vb-busy.png）计算样式：座位 background none／点 ::before content \"\"、8×8px、border-radius 50%、background rgb(245,158,11)、left -12px、top 8px、position absolute、animation wta-busy-blink 1s alternate infinite（拍到的 opacity 0.386 = 正在闪）／扫光 ::after content none／_title animation wta-busy-wave 2.6s、_summary delay -0.4333s，三拍 transform 采样 = -0.136px / -0.999px / -0.606px（文字确实在起伏）。③ 零位移：同一行 非运行→运行→非运行，行与内层盒逐值相同 (512,300,846,24)。④ 像素：橙色团块只在 (500,308)-(507,315) 与 (500,372)-(507,379) 两处（工具行、推理行），bash 行没有（自身裁剪，见 knownExceptions）。⑤ reduced-motion（Emulation.setEmulatedMedia）：::before 与 _title 的 animation-name 都变 none、点 opacity 1 仍可见。⑥ 亮色主题：seat.bg none、点在、水波在（--dsw-alias-state-warn-primary 亮暗都是 #f59e0b）。⑦ 爆炸半径穷举：全前端「选择器里带 _row/_root 的 :after」共 8 条 = 五族扫光 + 三族的 reduced-motion 兜底（tool 族原本缺兜底），所以 content:none 打不到别的东西。⑧ 一个坑（已修）：--wta-busy-dot 最初写在 :root 里，DSH 的语义 token 只定义在 body 上 ⇒ var() 链失效 ⇒ 点的背景整条声明作废、画出来是透明的；实测 getComputedStyle(html) 取 --dsw-alias-state-warn-primary 为空、body 里为 #f59e0b，所以颜色定义挂在 body 作用域。⑨ 真机运行态现场（新会话跑一条 bash sleep，`real-running2.png`）：真实运行行的 ::before = 8×8 / 50% / rgb(245,158,11) / left:-12px、::after content none、_title wta-busy-wave 2.6s（transform −0.805px）、_summary delay −0.4333s、座位 background none、phase active。⑩ 放开 bash 那条死裁剪之后的像素复核：三条克隆行的行首各出现一颗 8×8 橙点（(500,308) / (500,340) / (500,372)），零位移仍成立。"
+  },
   "lifecycle": {
     "meaning": "插件实例的生死规矩。热重载换掉的是**模块实例**：旧实例的 pointermove 监听、rAF、MutationObserver 都还在跑，而它的代码已经过期。所以「现在活着的是第几代」记在模块变量里是错的 —— 新模块从 0 开始数，两代互不认识。只有最新一代允许写页面；出事的那一代要能自我卸载，而不是每帧抛一次错。",
     "singleGeneration": {

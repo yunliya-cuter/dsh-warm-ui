@@ -9,9 +9,11 @@
 > 实测僵尸世代带来的 DOM 变更 2233 → 71 且静置段为 0）；
 > 「输入框玻璃底部曲率过大」已实施（只作用于输入框卡片槽位：`slope ×0.6` + `dispGain ×0.5`，
 > 底边带峰值位移 15.97 → 5.32px，而弧的几何/内阴影/圆角/底色一字未动，见 §0.7）；
-> 「鼠标在输入框上打字却变透明」已定案并修完（悬停判定被窗口失焦弄丢，只改一处、见 §0.8）。**
-> 同一个现象的第二条路径也已定案并修完（浏览器成串补发的「假离开」不能再打掉悬停态，见 §0.9，**改动尚未提交**）。**
-> 静态 13 项 + 真机断言 + 热重载回归全绿，且**没有重启过 dsh web**（也不需要）。**
+> 「鼠标在输入框上打字却变透明」已定案并修完（悬停判定被窗口失焦弄丢，只改一处、见 §0.8；
+> 第二条路径「假离开」见 §0.9。两笔都已提交：`63f1006` + `c2396b5`）。**
+> 「与背景不协调的黑色横带」已按用户要求彻底移除，并把「进行中」改成**行首闪烁橙点 +
+> 文字水波**（关掉五族扫光、座位不再画底，见 §0.10，**改动尚未提交**）。**
+> 静态 14 项 + 真机断言 + 热重载回归全绿，且**没有重启过 dsh web**（也不需要）。**
 
 ## 0. 两条平台事实（都实测过，别再用旧说法）
 
@@ -336,6 +338,78 @@ POINTER-ENTER ×30+                                → OVER-FLIP over=true      
 `afterLeaveIn` 必须 `.62`、`afterLeaveOut` 必须 `.30`）。静态 13 项 / `--browser` / `--hmr` 全绿。
 
 **待办**：改动只在工作树（4 个文件），等用户确认后提交。
+
+## 0.10 已实施：黑带移除 + 「进行中」改成闪烁橙点与文字水波（2026-09-25）
+
+用户报「界面上有一条与背景不协调的黑色横带」，要求**彻底移除**，并「在工具调用等条目的
+前面加一个闪烁的红点或橙点」；追问后追加要求：「把扫光关掉，换成让字体像在水波中规律抖动
+（频率和扫光一致）」。
+
+**先查证（代码里只有两种「暗带」，都源自同一个 token `--dsw-alias-bg-base`）：**
+
+| 候选 | 来源 | 形态（实测） |
+| --- | --- | --- |
+| ① 座位全宽渐隐带 | DSH `dsh-client-ui-conversation/lib/client.js:14652` 的 `.wSkVaW_root[data-phase=active] .wSkVaW_composerSeat` ＋ 插件原来的覆盖 | **1310×172px 暖黑** `rgba(16,14,12)`，顶 54px 斜坡到 `.46`；插件那条覆盖**不受 `data-phase` 限制**（连空会话 hero 态也在画） |
+| ② 五族行内扫光 | `o3BgMG`（工具）/ `CY-8Ka`（bash）/ `_5OnbHa`（命令卡，`/compact` 的「正在压缩…」就是它）/ `lcKema`（推理）/ `iWrAna`（skill）各一条 `[data-state=running]:after` | **300×24px 中性黑** `color(srgb .078 .078 .078 / .6)` = `#141414@60%`，2.6s 扫一次 |
+
+用户判断「那条黑带是扫光」；静态 + 截图像素证据指向座位带（截图里是**全宽 + 暖色**，
+而扫光是 300px 宽 + 中性色）。**两条都不符合「与主题协调」，按用户要求两条都去掉** ——
+所以归属分歧不影响修法；A/B 原始数字（同页面先后截图，消除动态墙纸漂移）留在
+`.edge-preview/_evidence-band.md`。
+
+**改法（只动 `lib/client.js` 一个文件）：**
+
+- 座位：`background: none !important`（只换视觉；节点、占位、padding/margin 一律不碰），
+  并删掉 `--wta-seat-*` 四个常量（删规则就删常数，否则又留下「用了却没定义」的坑）。
+- 扫光：`[data-state="running"] [class*="_row"]::after` ＋ `[data-state="running"][class*="_root"]::after`
+  → `content: none !important`（**整条去掉**，不是停动画 —— 停住的 300px 暗块更难看）。
+- 进行中指示：`[data-state="running"]::before` 行首橙点（`--dsw-alias-state-warn-primary` = `#f59e0b`，
+  8px 圆、绝对定位、`wta-busy-blink` 1s alternate opacity .35→1 —— 与 DSH 输入框那颗 pending 点同规格）
+  ＋ `_title` / `_summary` 走 `wta-busy-wave`（2.6s，**与原扫光同频**，振幅 ±1px，摘要差半拍 ⇒ 波从左往右走）。
+- 新增增强项 `busy: 1`（`body[data-wta-busy]`）：关掉即回到 DSH 原生（扫光回来、无点无水波）。
+
+**验收（逐条实测，不是"应该好了"）：**
+
+| 口径 | 结果 |
+| --- | --- |
+| 零位移 | 同一行 非运行→运行→非运行，行与内层盒逐值相同 `(512,300,846,24)` |
+| 座位带 | `background-image: none`；关掉它只影响座位区（座位区 Δ+1.60、卡外左侧 Δ+2.06、正文区 **Δ+0.01**） |
+| 橙点（像素级） | 三条克隆行行首各一颗 8×8：`(500,308)` / `(500,340)` / `(500,372)`（工具 / bash / 推理） |
+| 真机运行态 | 新会话跑 `bash sleep`，运行行 `::before` = 8×8 / `rgb(245,158,11)` / `left:-12px`，`::after content: none`，水波 2.6s，座位 `background-image: none`（`real-running2.png`） |
+| 扫光 | 五个族的 `::after` 都是 `content: none` |
+| 水波 | 三拍 `transform` = −0.136px / −0.999px / −0.606px（文字确实在起伏） |
+| reduced-motion | `animation-name` 全变 `none`、点 `opacity 1` 仍在 ⇒ 「动画停，但仍看得出进行中」 |
+| 亮 / 暗主题 | 都验过：`seat.bg none`、点在、水波在（`#f59e0b` 两个主题同值） |
+
+**真机（Firefox / Gecko）**：`--browser` 的 `busyIndicator` =
+`{seatBg:"none", dot:{8px/50%/rgb(245,158,11)/left:-12px/absolute/wta-busy-blink 1s/infinite/alternate},
+sweep:{content:"none"}, wave:{title 2.6s, summary delay −0.4333s}}`。
+
+**真机抓到的第二个事实（差点被当成"例外"放过去）**：跑 `bash` 的 `sleep` 时，
+`document.querySelectorAll('[data-state="running"]')` **只有 `CY-8Ka_root` 一个** ——
+也就是说那一行就是**顶层条目**，不是「嵌在工具行里的细节行」（我原先的推断是错的），
+而它自身 `overflow:hidden` 会把行首外挂的点一起裁掉。它裁的本是那条扫光（300px、从 `left:-300px`
+扫进来），扫光整条关掉后这层裁剪再无存在理由 ⇒ 放开 `overflow: visible`（不碰 padding / 间隙 /
+尺寸 ⇒ 零位移；对其他族无操作，实测它们的 root 本来就是 visible）。放开后像素复核：三条克隆行的
+行首各一颗 8×8 橙点（`(500,308)` / `(500,340)` / `(500,372)`），真机现场（新会话跑 `bash sleep`）
+也拍到运行行的点、水波与「座位无底」。
+
+**范围边界（如实登记）**：流式正文 / 重试行 `[data-active]` / 等待确认不带 `data-state`，
+不在这一族里（想扩要单独走一轮）。
+
+**一个踩过的坑（已修，值得记）**：橙点颜色最初定义在 `:root` 里，而 DSH 的语义 token 只定义在
+`body` 上 ⇒ `var()` 链在计算值阶段失效 ⇒ 整条 `background` 被丢弃 ⇒ **点画得出来却是透明的**
+（尺寸/圆角都对，只有颜色没了）。实测 `getComputedStyle(html)` 取 `--dsw-alias-state-warn-*` 为空、
+`body` 里是 `#f59e0b`。所以颜色定义挂在 `body[data-wta-busy="1"]` 上，第 14 项检查也会拦「写回 `:root`」。
+
+> ⚠️ 写这一段 CSS 时踩过一个坑：注释里写了反引号（模板字符串里就是它自己），
+> 直接把 `EXTRA_STYLESHEET` 截断 —— 被检查项 1「语法」（`node --check`）当场拦下。
+> 在这个文件里改注释的唯一纪律：**CSS 模板里不要出现反引号**。
+
+**守卫**：契约 `busy`（`must` / `forbidden` / `dot` / `wave` / `knownExceptions` / `measured`）＋
+`tools/check.mjs` 第 14 项（含「颜色 token 全源码只出现一次」「不许写回 `:root`」「节奏数字必须等于契约」）＋
+真机探针 `tools/probes/contract.js` 第 ⑬ 段。静态 14 项 / `--browser` / `--hmr` 全绿；
+`--hmr` 跑完 `lib/client.js` 逐字节还原（sha256 前缀 `ddd87399bbde`）。**改动尚未提交**（等用户确认）。
 
 ## 1. 这一轮做了什么（可复核）
 
