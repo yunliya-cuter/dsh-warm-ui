@@ -117,6 +117,11 @@
       "native",
       "fallback"
     ],
+    "chipUniqueness": {
+      "selector": ".wti-chip",
+      "meaning": "工具行里「优化」胶囊恒为一颗。清扫按**类名**而不是只按归属标记 data-dsh-warm-collapse：标记是后来才加的，页面里可能还留着更早一代造出来的同类节点（没有那个属性，只按属性扫不到），于是和新胶囊并排出现两颗 —— 2026-09-24 用户截图报的就是它。另外只有最新一代实例允许写工具行（换代守卫），否则两个活实例会互相删/塞打架。",
+      "measured": "往 .dpo-controls 塞一颗无标记同类节点：计数 1 → 2 并一直保持（复现）；改成按类名清扫后同一动作的结果是恒定 1 颗。"
+    },
     "rowHeightPx": 24,
     "rowHeightVar": {
       "package": "dsh-warm-ui",
