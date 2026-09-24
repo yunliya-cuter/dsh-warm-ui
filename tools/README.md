@@ -28,7 +28,7 @@ DSH_NODE_EXE="/mnt/c/Program Files/nodejs/node.exe" DSH_URL="http://127.0.0.1:30
 | 标记名 | 契约里的标记属性都在代码里出现（改名必须同步契约） |
 | 挂载入口 | 没有裸的 `document.body/head.append`（页面外层节点必须走 `mountDetached` / `mountLayer` / `installStyleSheet`） |
 | 变量闭包 | 每张样式表引用的 CSS 变量都在**本表内**有定义（否则整条声明会被复位成 initial） |
-| 玻璃无动效 | 契约说 `glass.motion.state = none` 时，代码里不许再出现流动层的配方 / 噪声原语 / 开关（想加回来必须先改契约） |
+| 玻璃无动效 | 契约说 `glass.motion.state = none` 时，代码里不许再出现流动层的配方 / 噪声原语 / 开关 —— 按一张 15 行的**已删标识符表**逐个查（半删状态过得了 `node --check`，只有这张表拦得住） |
 
 ## 2. 真机断言（需要 Windows 侧 Firefox）
 
@@ -62,6 +62,7 @@ node tools/check.mjs --browser
 | `probes/p0-composer.js` / `p0-composer-set.js` | 量/写 DSH 自己的会话宽度偏好（判断"输入框变宽"到底是谁干的） |
 | `probes/engine-glass.js` / `glass-cost.js` | 玻璃的引擎能力矩阵、以及「给 Gecko 补元素级滤镜」这条替代路每帧要付多少（见第 5 节） |
 | `probes/dup-chip.js` | 重复胶囊回归：往 `.dpo-controls` 塞一颗**没有归属标记**的同类节点（= 旧版本遗留），每 250ms 数一次 `.wti-chip` —— 应当只在注入那一拍是 2，随后恒为 1 | Firefox：`harness.mjs eval`；Chromium：`cdp.mjs both`（先包成 `(async () => { … })()`） |
+| `probes/glass-zombie.js` | 僵尸世代回归：假 loader + 假 ctx 连挂**两代**（`effect` 不给卸载，等价于热重载漏掉了旧实例），在输入卡片上打 120 发指针风暴，按阶段数 DOM 变更、按来源归因（`.wti-chip` 删插 / 属性重复写），最后把 `elementFromPoint` 换成必抛来验"出错自我卸载" | 同上；判定看**静置段**（改完应为 0），另看 `throwOnce`：未被捕获错误 0、`console.error` 恰好 1 条、`__dshWarmExtra.glass.alive === false` |
 
 ## 3b. 重拍契约参考截图
 
