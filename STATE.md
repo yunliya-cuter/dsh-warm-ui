@@ -68,23 +68,87 @@
 边缘**仍会**看到壁纸在动 —— 那是壁纸（`dsh-warm-wallpaper`）的，要静止它得关壁纸或改玻璃的
 采样方式，两件都改观感，**没有替用户决定**（写进契约 §6 了）。
 
-**用户后来问的「输入框经常闪烁」：** 全新页面 + 当前代码，连续 8 秒实测：卡片 / 玻璃 svg /
-body / 工具行的 DOM 变更是 **0 次**，卡片引用的滤镜 id 每一拍都在，动画 0 个
-（做法：给卡片 / 玻璃 svg / body / 工具行各挂一个 MutationObserver，数 8 秒里的变更，
-每 100ms 再采样一次卡片内联 backdrop-filter 引用的滤镜 id 在不在）。
-而**在一次热重载期间**同样的探测方式量到：玻璃 svg 被换掉
-**2** 次、卡片 style/class 被写 **16** 次、body 28 次 —— "每存一次盘闪一下"是热重载的固有代价
-（本轮我存了十几次 `lib/client.js`）。删流动层之前那 20fps 的属性写入还会让浏览器每拍重跑
-一遍滤镜链，也可能被看成闪烁。**等用户确认：现在不存盘时还闪不闪。**
+**「输入框经常闪烁」已定案（2026-09-24 夜，用户贴出控制台）：**
+
+三个不同 `rev` 的 `client.js` **同时活着**，各自在指针移动时抛 `ReferenceError`：
+
+| 报错 | 栈 | 对应哪一版 |
+| --- | --- | --- |
+| `GLASS_WARP is not defined` | `glassWarpOf` ← `buildGlassMap` ← `bucketFor` ← `dress` ← `sync` ← `hoverTick` ← `onPointerMove` | rev `164c3bf…`：表已删、`glassWarpOf` 还在 |
+| `fade is not defined` | `buildGlassMap` | rev `f37608f…`：`const fade` 已删、遮罩块还在 |
+| `glassWarpOf is not defined` | `buildGlassFilter` | rev `912cf9f…`：`glassWarpOf` 已删、调用点还在 |
+
+那三个 rev 就是我删「流动层」时**半删状态**的存盘：语法合法（`node --check` 查不出来），只有运行到才抛。
+它们能成功 apply —— 首屏那次 `sync()` 时卡片还不存在（`targets()` 为空 → 不调用 `dress`），异常要等
+卡片出现 + 指针移动才由 `hoverTick` 抛出；而换代时这些回调（`pointermove` 监听 + rAF）没有被撤掉，
+于是成了"僵尸世代"：每个指针移动抛一次，`dress` 中途中断 → 卡片样式停在半成品 → **持续闪烁**。
+
+实测对照：用户页面 5 秒 `domMutations` **1284**；全新页面 + 当前代码 **0**（且 `missingFilter 0`、
+`chips 1`、`noise 0` → 当前这一代是好的、也确实加载上了）。
+
+附带查出的真问题：`chipGeneration` 这类计数器写在**工厂体内的模块作用域**（`lib/client.js:1482`），
+而热重载会重新执行工厂体 → 每个模块实例各有一份计数 → **跨实例守卫等于不存在**，
+注释把它说大了，要改成挂在 `window` 上。
+
+## 0.6 已批准待实施的计划：清僵尸 + 跨实例换代守卫 + 出错自愈
+
+**目标 / 验收**：① 泄漏的旧世代不能再写页面；② 任一代在重入路径上抛异常时**自我卸载**（而不是每帧重试）；
+③ 热重载期间不再留半成品世代。验收 = 用户刷新后 5 秒探测器 `domMutations ≲ 10` 且控制台无红色报错；
+两个伪造世代并存时 churn 与 idle 同档；`node tools/check.mjs` 与 `--browser` 全绿；视觉无回归。
+
+**用户侧先做**：硬刷新一次页面 —— 那三个僵尸跑的是**没有守卫的旧代码**，代码救不了，只能刷新清掉。
+
+**代码改动（`lib/client.js`）—— 存盘顺序必须是"先加 → 再切 → 后删"，每一步都保持文件自洽
+（半删状态正是这次事故的根）：**
+
+1. **跨实例换代守卫**：在 `ATTR` / `EXTRA_KEY` 附近加一张键名表 + 三个函数 ——
+   `GENERATION_KEYS = { glass: "__dshWarmGenGlass", chip: "__dshWarmGenChip" }`、
+   `generationOf(key)` / `beginGeneration(key)` / `endGeneration(key, mine)`
+   （只有"我本来就是最新一代"时才把号码往后推）。`mountGlass()` 里 `const generation = beginGeneration("glass")`，
+   `sync()` 顶部 `if (generation !== generationOf("glass")) return;`（`sync` 是所有重入路径的唯一收口：
+   `hoverTick` / `schedule` / `resize` / `scroll` 都走它），`remove()` 里 `endGeneration("glass", generation)`；
+   `mountOptimizerCollapse()` 把 `let chipGeneration = 0` 换成同一套（`step()` 现有守卫改读共享值）。
+2. **出错自我卸载**：`mountGlass` 的清理收成幂等的命名函数 `remove()`（内部 `dead` 标记），`sync()` 包一层
+   `try { … } catch (error) { remove(); reportGlassFailure(error); }`；`reportGlassFailure` 只报一次
+   `console.error` 并写 4 的出口。语义：**出错时玻璃整体关掉**（输入框回普通样式），不再每帧闪。
+3. **apply 期不留半成品**：`mountExtras()` 用局部 `disposers` 数组边创建边登记（样式表 / svg / 监听 /
+   observer / `guardTimer`），先定义 `dispose()`，再把 `paintExtraFlags()` / `mountGlass()` / 首次 `sync()`
+   包进 `try { … } catch (error) { dispose(); throw error; }`；返回 `dispose`。
+4. **可观测出口**：`window.__dshWarmExtra.glass = { alive: true, generation }`（挂载时）/
+   `{ alive: false, generation, error }`（自我卸载时），供探针断言"这一代还活着"。
+5. **热路径少写同样的值**：`paintExtraFlags()` 改成"值没变就不写"（`lib/client.js:1934`；它挂在
+   指针移动 → `sync()` 这条热路径上）。
+6. **静态检查拦半删状态**：`tools/check.mjs` 第 11 项「玻璃无动效」扩成一张"已删标识符表"
+   （只扫 `spec.entry` = `lib/client.js`，探针不受影响）：`GLASS_WARP`、`glassWarpOf`、`warpAt`、
+   `warpFilterNodes`、`warpNoise`、`warpMask`、`warpField`、`maskUrl`、`warpTimer`、`warpStartedAt`、
+   `tickWarp`、`scheduleWarp`、`glassWarp`、`data-wta-glasswarp`、`feTurbulence`。命中即失败并说明原因。
+
+**契约 / 文档**：`contract/ui-contract.json` 加顶层 `lifecycle`（`singleGeneration` / `failSafe` + 本次实测
+1284 / 0）；`ui-contract.md` 第 1、6 节补两条不变量与事故记录；`tools/README.md` 探针表加新探针；
+`tools/probes/contract.js` 第 ⑨ 节加 `glassLife: { alive, generation }`，`alive !== true` 判违规。
+
+**新增回归探针 `tools/probes/glass-zombie.js`**（提交进仓库）：从 `window.__DSH_BOOT__` 取 `dsh-warm-ui`
+的 bundle URL（退路：`performance.getEntriesByType("resource")`）→ `fetch` 源码 → 用假
+`__ModuleLoader__` + 假 ctx（`effect: (fn) => fn()`，即永不 dispose）**连续 apply 两次**
+（伪造"泄漏的旧世代 + 新世代"）→ 装 `error` 计数器 → 在输入卡片上派发约 200 次 `pointermove` + 等 2 秒 →
+返回 `{ errors, domMutations, chips, missingFilter, glassAlive, glassGen, cardFilter }`。
+**判据**：改之前两代互删互塞（胶囊 ping-pong）→ `domMutations` 数百；改之后旧世代停手 → 与 idle 同档。
+（假 ctx 无 `slots` 不影响：外观面板在无 `slots` 时静默降级，见 `lib/client.js:734`。）
+
+**提交拆两个**：① `lib/client.js` + 契约 + `tools/check.mjs` + `tools/probes/contract.js`；
+② `tools/probes/glass-zombie.js` + 文档。**回退**：`git revert` 这两个提交（各自独立）。
+
+**不做**：不重启 `dsh web`；不加依赖；不动 `dsh-prompt-optimizer`；不动壁纸；不改玻璃与工具行的视觉；
+不为了让检查通过而改探针的期望值。已知不在计划内：热重载每次仍会重建玻璃 svg 与样式表 →
+**每存一次盘输入框仍会闪一下**（HMR 固有，不是这次的 bug）。
 
 **待用户 / 待办：**
 
-1. **输入框宽度**（上一轮的旧问题，仍未定）：插件没有任何宽度规则，宽度是 DSH 的偏好
+1. **闪烁修复计划**（§0.6）：等你刷新页面确认"刷新后不闪"，或直接说"开始做"，我就实施。
+2. **输入框宽度**（旧问题，仍未定）：插件没有任何宽度规则，宽度是 DSH 的偏好
    `localStorage['dsh.conversation.contentWidth']`（值 = 卡片宽 − 32，下限 640）。三条路：
    拖宽度手柄 / 写偏好后刷新 / 让插件加上限（要先进契约）。**等用户给目标宽度。**
-2. 「输入框经常闪烁」：等用户确认是不是只在热重载时闪（见上）。
 
-## 1. 这一轮做了什么（可复核）
 ## 1. 这一轮做了什么（可复核）
 
 **A. 2026-09-24：删掉玻璃「流动层」+ 修工具行重复胶囊**
@@ -229,12 +293,18 @@ WebGL 截图必须真 Firefox（无头 Chromium 的 WebGL 是死的）。窄屏�
 
 ## 7. 工作习惯（用户明确要求过的）
 
+- **改 `lib/client.js` 时每一步存盘都要是自洽状态**：先加新东西 → 再切调用点 → 最后删旧的。
+  半删状态（删了定义没删调用）能过 `node --check`，但热重载进浏览器后会变成"僵尸世代"：
+  每帧抛异常 + 卡片样式停在半成品 = 输入框持续闪烁（2026-09-24 真踩过，见 §0.5）。
+  检查项「玻璃无动效」现在会把已删标识符的回归拦下来，但存盘顺序仍要靠人守。
+
 - 少硬编码：常数/形态收进表或 `:root` 变量层，新增一种形态 = 加一行；
 - 别用像素测量脚本做识别，直接用 `read_image` 看（我是识图模型）；
 - 先看现有代码约定再动手；单职责小函数；只给"非显然的为什么"写注释；本地化改动；
 - 交付时说清"哪些值被收进了哪张表"、以及哪些结论是**实测**的、哪些只是**推理**；
 - **回退点（2026-09-24 = 删流动层 / 修重复胶囊）**：
-  - 本轮两个提交：`51cea6e`（重复胶囊）、`8e3a626`（删流动层）；
+  - 本轮提交：`51cea6e`（重复胶囊）、`8e3a626`（删流动层）、`ebead85`（回退点文档）、
+    `bf43ce7`（回归探针 `probes/dup-chip.js` + 清脚手架）；
     想回到"还有流动层"那一版：`git revert 8e3a626`，或 `git switch --detach c7c6525`（只读看）。
 - **回退点（上一轮 = 流动层开发前）**：
   - 归档：`.snapshots/_archives/dsh-warm-ui-20260919-135358-pre-glass-distort.tar.gz`
