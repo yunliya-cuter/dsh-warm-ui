@@ -209,6 +209,57 @@ if (curvatureState === "enforced") {
   }
 }
 
+
+/* ── ⑫ 悬停判定：窗口失焦不许把「指针还在卡片上」弄丢 ──────────────────────
+ *
+ * 用户 2026-09-25 报「鼠标停在输入框上打字，输入框由模糊态回退成透明态」。根因是插件把
+ * window blur 当成"指针离开文档"，而打字不会重算判定 —— 状态一直粘着，直到鼠标移动。
+ * 这一项按插件自己的两条路径复现：① 指针坐标写到卡片上 → 必须是悬停态；
+ * ② 窗口失焦 → **仍必须是悬停态**（改前这里是常态，就是用户看到的"变透明"）；
+ * ③ 真离开文档（pointerleave）→ 必须回常态（修失焦不能把"真离开"也吃掉）。
+ * 判据用 --wta-glass-tint-cur（JS 按状态写的内联变量）：它对两种引擎都一样，而
+ * backdrop-filter 里的 url() 只有 Chromium 认。
+ */
+const pointerState = (((C.glass || {}).pointer) || {}).state || null;
+let hoverProbe = null;
+if (card && pointerState === "enforced") {
+  const want = C.glass.pointer;
+  const idleTint = (((C.glass || {}).curvature) || {}).idleTint;
+  const tintOf = () => card.style.getPropertyValue("--wta-glass-tint-cur").trim();
+  const overNow = () => card.hasAttribute("data-wta-over");
+  /* 等两拍：rAF 是插件重算的时机，但无头窗口里 rAF 可能被节流 —— 谁先到算谁，别把断言挂死 */
+  const settle = () => new Promise((done) => {
+    let fired = false;
+    const finish = () => { if (fired) return; fired = true; clearTimeout(timer); done(); };
+    const timer = setTimeout(finish, 150);
+    requestAnimationFrame(() => requestAnimationFrame(finish));
+  });
+  const box = card.getBoundingClientRect();
+  const at = { clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 };
+  hoverProbe = { hover: null, afterBlur: null, afterLeave: null };
+  window.dispatchEvent(new PointerEvent("pointermove", { clientX: at.clientX, clientY: at.clientY, bubbles: true }));
+  await settle();
+  hoverProbe.hover = { over: overNow(), tint: tintOf() };
+  if (!hoverProbe.hover.over || hoverProbe.hover.tint !== want.calmTint) {
+    violations.push("指针移到输入框上之后不是悬停态（over=" + hoverProbe.hover.over + " 底色=" + hoverProbe.hover.tint + "，契约记的悬停底色是 " + want.calmTint + "）");
+  }
+  window.dispatchEvent(new Event("blur"));
+  await settle();
+  hoverProbe.afterBlur = { over: overNow(), tint: tintOf() };
+  if (!hoverProbe.afterBlur.over || hoverProbe.afterBlur.tint !== want.calmTint) {
+    violations.push("窗口失焦之后悬停态丢了（底色 " + hoverProbe.afterBlur.tint + "，应为 " + want.calmTint + "）—— 用户报的「鼠标在输入框上打字却变透明」就是这条：失焦被当成指针离开，而打字不会重算判定");
+  }
+  document.documentElement.dispatchEvent(new PointerEvent("pointerleave", { bubbles: false }));
+  await settle();
+  hoverProbe.afterLeave = { over: overNow(), tint: tintOf() };
+  if (hoverProbe.afterLeave.over || (idleTint && hoverProbe.afterLeave.tint !== idleTint)) {
+    violations.push("真离开文档之后没回常态（底色 " + hoverProbe.afterLeave.tint + "）—— 修「失焦误判」不能把 pointerleave 这条真离开也吃掉");
+  }
+  /* 收尾：指针放回卡片上，别让页面停在常态影响别的断言 */
+  window.dispatchEvent(new PointerEvent("pointermove", { clientX: at.clientX, clientY: at.clientY, bubbles: true }));
+  await settle();
+}
+
 return {
   measured: {
     state,
@@ -228,6 +279,7 @@ return {
     chips: { byClass: chipsByClass, marked: chipsMarked },
     glassLife: glassLife ? { alive: glassLife.alive, generation: glassLife.generation } : null,
     glassArc: { insets: arcInsets, radius: arcRadius, tint: idleTint },
+    glassHover: hoverProbe,
     viewport: window.innerWidth + "x" + window.innerHeight,
   },
   violations,

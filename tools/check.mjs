@@ -25,6 +25,9 @@
  *                     （按"已删标识符表"逐个查，半删状态也算红）
  *  12. 底部曲率 —— 契约 glass.curvature 的设计数字与代码里那一处相等，且系数不许低到
  *                   "把曲率调成看不见"；折射路径与槽位表两行必须在（不许拿曲率换可读性）
+ *  13. 悬停判定 —— 契约 glass.pointer 在代码里成立：真离开只认 documentElement 上的
+ *                   pointerleave；窗口失焦走独立处理器、只丢命中缓存并按最后的坐标重算
+ *                   （**失焦不许当成指针离开**，那正是用户报的"鼠标在输入框上打字却变透明"）
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -390,6 +393,69 @@ function checkGlassCurvature() {
 	}
 }
 
+
+/* ── 13. 悬停判定：窗口失焦不许把「指针还在卡片上」弄丢 ─────────────────────
+ *
+ * 2026-09-25 用户报「鼠标停在输入框上打字，输入框由模糊态回退成透明态，鼠标一动就恢复」。
+ * 复现出来是这条：插件把 window blur 当成「指针离开文档」（走 onPointerGone：清坐标 +
+ * inside = false），而**打字不会重算悬停判定**（只有 pointermove 会）—— 状态一直粘在
+ * 「指针不在卡片上」那一档，鼠标在不在输入框上完全看不出区别，要等下一次鼠标移动才回来。
+ *
+ * 这一条守三件事：
+ *   ① 真离开只有一条判据：documentElement 上的 pointerleave（挂错地方 = 状态会莫名丢掉）；
+ *   ② 失焦有独立处理器，且**只丢命中缓存并按最后的坐标重算** —— 不许出现 inside = false；
+ *   ③ 那个"缺陷写法"（blur 直接接 onPointerGone）不许再出现：它就是用户看到的现象本身。
+ * 手感那一半（底色与模糊真的变没变）只能真机断言，见 tools/probes/contract.js 第 ⑫ 段。
+ */
+function checkGlassPointer() {
+	const spec = contract.packages["dsh-warm-ui"];
+	const p = contract.glass && contract.glass.pointer;
+	if (!spec || !p) {
+		add("悬停判定", "契约里缺 glass.pointer（指针怎么算悬停、失焦算不算离开，必须是一条登记过的事实）");
+		return;
+	}
+	const code = read(spec.entry);
+	for (const needle of p.must || []) {
+		if (!code.includes(needle)) {
+			add("悬停判定", spec.entry + " 里找不到 " + JSON.stringify(needle) + "（契约 glass.pointer.must 登记过）");
+		}
+	}
+	for (const needle of p.forbidden || []) {
+		if (code.includes(needle)) {
+			add("悬停判定", spec.entry + " 里还有 " + JSON.stringify(needle)
+				+ " —— 这就是「鼠标在输入框上打字却变透明」的写法：失焦被当成指针离开，而打字不会重算判定");
+		}
+	}
+	/* 失焦处理器体内只许「丢缓存 + 重算」：不清坐标，也不把 inside 置 false。 */
+	const want = p.blurHandler || {};
+	if (want.head) {
+		const at = code.indexOf(want.head);
+		if (at === -1) {
+			add("悬停判定", spec.entry + " 里找不到失焦处理器 " + JSON.stringify(want.head) + "（失焦必须有独立处理器）");
+		} else {
+			const end = code.indexOf("\n\t\t\t};", at);
+			const body = end === -1 ? code.slice(at) : code.slice(at, end);
+			for (const needle of want.must || []) {
+				if (!body.includes(needle)) {
+					add("悬停判定", "失焦处理器体内缺 " + JSON.stringify(needle) + "（失焦只该丢命中缓存并按最后的坐标重算）");
+				}
+			}
+			for (const needle of want.mustNot || []) {
+				if (body.includes(needle)) {
+					add("悬停判定", "失焦处理器体里出现了 " + JSON.stringify(needle) + " —— 失焦不等于指针离开，坐标不许清");
+				}
+			}
+		}
+	}
+	/* 悬停那一档的底色是"眼睛看得到的状态量"：契约登记一个值，代码里只许有一处定义。 */
+	if (p.calmTint) {
+		const hits = code.split(p.calmTint).length - 1;
+		if (hits !== 1) {
+			add("悬停判定", "悬停底色 " + p.calmTint + " 在 " + spec.entry + " 里出现 " + hits + " 次（应恰好一次：一处定义 = 一个含义）");
+		}
+	}
+}
+
 /* ── 热重载回归（--hmr）：改一次文件 → 插件重建 → 再量一遍 ─────────────
  *
  * 为什么值得专门做一条命令：这一轮两个 bug（壁纸被推到页面下面、工具行变回原样）
@@ -556,6 +622,7 @@ const checks = [
 	["探针", checkProbes],
 	["玻璃无动效", checkGlassMotion],
 	["底部曲率", checkGlassCurvature],
+	["悬停判定", checkGlassPointer],
 ];
 for (const [label, run] of checks) {
 	const before = findings.length;

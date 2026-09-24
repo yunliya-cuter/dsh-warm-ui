@@ -30,6 +30,7 @@ DSH_NODE_EXE="/mnt/c/Program Files/nodejs/node.exe" DSH_URL="http://127.0.0.1:30
 | 变量闭包 | 每张样式表引用的 CSS 变量都在**本表内**有定义（否则整条声明会被复位成 initial） |
 | 玻璃无动效 | 契约说 `glass.motion.state = none` 时，代码里不许再出现流动层的配方 / 噪声原语 / 开关 —— 按一张 15 行的**已删标识符表**逐个查（半删状态过得了 `node --check`，只有这张表拦得住） |
 | 底部曲率 | 契约 `glass.curvature` 里的每个设计数字（`slope` / `dispGain` / `bevel` / `shape` …）在代码里正好出现一次；槽位系数必须在登记的地板之上 —— 低于地板就是「把曲率调成看不见」来换可读性；折射路径与槽位表两行也必须在 |
+| 悬停判定 | 契约 `glass.pointer`：悬停靠「指针坐标 + `elementFromPoint`」而不是 `:hover`；**真离开只认 `documentElement` 的 `pointerleave`**，窗口失焦走独立处理器、只丢命中缓存并按最后的坐标重算 —— 缺陷写法（`blur` 直接接 `onPointerGone`）不许再出现，它就是「鼠标在输入框上打字却变透明」。手感那一半（底色/模糊真变没变）在 `contract.js` 第 ⑫ 段 |
 
 ## 2. 真机断言（需要 Windows 侧 Firefox）
 
@@ -57,7 +58,7 @@ node tools/check.mjs --browser
 
 | 探针 | 用途 |
 | --- | --- |
-| `probes/contract.js` | 按 `contract/ui-contract.json` 逐条断言（样式归属、节点唯一、脱离文档流、文档不可滚、工具行三态、输入框宽度） |
+| `probes/contract.js` | 按 `contract/ui-contract.json` 逐条断言（样式归属、节点唯一、脱离文档流、文档不可滚、工具行三态、输入框宽度、底部曲率、悬停判定） |
 | `probes/p0-ownership.js` | 快照式体检：把样式表/归属/壁纸/工具行/输入框一次量全（排查用，不做断言） |
 | `probes/p0-hmr.js` | 热重载回归：数 `/plugins/events` 的 rebuilt 帧 + 每 3 秒取一次样本（`--hmr` 就是用它） |
 | `probes/p0-composer.js` / `p0-composer-set.js` | 量/写 DSH 自己的会话宽度偏好（判断"输入框变宽"到底是谁干的） |
