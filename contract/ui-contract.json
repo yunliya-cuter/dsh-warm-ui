@@ -145,8 +145,8 @@
   "glass": {
     "meaning": "液态玻璃：折射 + 边缘光 + 表面反射。**不做动效** —— 玻璃上没有任何随时间变化的位移",
     "targets": [
-      "[data-slot=\"conversation.composer.bar\"] [class*=\"_card\"]",
-      "[data-slot=\"conversation.input.dock\"] [class*=\"_root\"]"
+      { "sel": "[data-slot=\"conversation.composer.bar\"] [class*=\"_card\"]", "variant": "composer" },
+      { "sel": "[data-slot=\"conversation.input.dock\"] [class*=\"_root\"]", "variant": "" }
     ],
     "motion": {
       "state": "none",
@@ -157,6 +157,48 @@
         "EXTRA_DEFAULTS 里不得再出现 glassWarp"
       ],
       "measured": "同一张卡片两相位差分（1752×830，Chromium）：壁纸开着时上沿带 5.73；把流动层驱动冻住后仍有 5.43；把壁纸那层藏掉后只剩 0.23。即卡片边缘的「动」绝大部分来自会动的壁纸透过玻璃，玻璃自身那点动才是被删掉的流动层 —— 删掉后壁纸那部分照旧可见（那是壁纸本身，不是玻璃的动效）。"
+    },
+    "curvature": {
+      "state": "enforced",
+      "meaning": "用户 2026-09-25 报的「输入框玻璃底部曲率过大」—— 这里的「曲率」= 底边折射带里的**位移幅度**（背景被掰弯多少），分两个旋钮：slope 管「弯得多快」（位移随深度的增长率 = 边缘局部放大倍数 − 1 的封顶），dispGain 管「弯的总量」（位移场整体倍数）。降它们的**同时**必须保住弧的几何（bevel / shape / edgeW / rim / shade / light 与 5 层 inset 一字不动），也就是**不许拿曲率换可读性**。",
+      "knob": "GLASS_MATERIAL.slope = 1.5 / dispGain = 1，经 GLASS_SLOT_VARIANTS.composer 折 slope ×0.6、dispGain ×0.5（→ 0.9 / 0.5，位移场整体约为基准的 38%）；只作用于输入框卡片槽位，任务面板槽位（variant 为空）保持基准材质。",
+      "codeGuards": [
+        "composer 槽位的每个系数都必须落在 [floors 里的地板, 1) 之间：低于地板 = 曲率被调成看不见，等于 1 或整行没了 = 这次修复被无声撤销（dispGain 填 0 也不生效：代码里 `|| 1` 会把它当成 1）",
+        "bevel / shape / edgeW / rim / shade / light 必须与契约里的 designNumbers 逐字相等（弧的几何不许被换掉）",
+        "折射路径 buildGlassMap + feDisplacementMap + svgFilter: true 必须在（不许靠删滤镜换可读性）",
+        "GLASS_TARGETS 必须同时保留 composer 变体行与任务面板基准行（改动只作用于该输入框）"
+      ],
+      "designNumbers": [
+        { "name": "GLASS_MATERIAL.thickness", "needle": "thickness: 70,", "value": 70 },
+        { "name": "GLASS_MATERIAL.slope", "needle": "slope: 1.5,", "value": 1.5 },
+        { "name": "GLASS_MATERIAL.bevel", "needle": "bevel: 18,", "value": 18 },
+        { "name": "GLASS_MATERIAL.shape", "needle": "shape: \"squircle\",", "value": "squircle" },
+        { "name": "GLASS_MATERIAL.dispGain", "needle": "dispGain: 1,", "value": 1 },
+        { "name": "GLASS_SLOT_VARIANTS.composer.slope", "needle": "slope: 0.6", "value": 0.6 },
+        { "name": "GLASS_SLOT_VARIANTS.composer.dispGain", "needle": "dispGain: 0.5", "value": 0.5 }
+      ],
+      "floors": {
+        "GLASS_SLOT_VARIANTS.composer.slope": 0.45,
+        "GLASS_SLOT_VARIANTS.composer.dispGain": 0.35
+      },
+      "bottomBandPeakFloorPx": 3.5,
+      "refractionPath": ["buildGlassMap", "feDisplacementMap", "svgFilter: true"],
+      "arcInsetLayers": 5,
+      "arcRadiusPx": 22,
+      "idleTint": "rgba(24, 21, 18, .30)",
+      "measured": "tools/probes/curvature.js（1752×830，Chromium；读的是**渲染真正用的那张位移图**，不是按公式复算）三段对照 —— 基准 / 只折 slope / 再折 dispGain：底边带峰值位移 15.97 → 10.64 → **5.32px**（累计 −67%）；带内每像素衰减 2.02 → 1.54 → **0.77px/px**；全局 maxd 18.42 → 14.04 → **7.02px**；整片透镜的尾巴 6.33 → 6.36 → 3.18px（第一版没动它，用户说「还是太大」之后按总量一起折）；底边弧剖面峰值 0.529 → 0.537 → **0.537（没动）**；内阴影仍 5 层、圆角仍 22px、底色仍 rgba(24, 21, 18, .30)（都没动）。用户侧口径：只折 slope 那版被否（「我感觉曲率还是太大了」），所以再有下一轮就是这个数继续往下调、或动 bevel（带更窄）。",
+      "rejected": "先按 thickness 折 ×0.6（70 → 42）改过一版：峰值位移只从 18.42px 掉到 16.76px（−9%），因为剖面被 slope 夹住的那一段不随厚度变 —— 那一版撤销、厚度回基准。"
+    },
+    "legibility": {
+      "state": "measured",
+      "meaning": "「字清晰可读」的可测口径：输入框 DOM 文字自身**永远不被滤波**（实测可编辑区的 filter 与 backdrop-filter 都是 none、字色 rgb(223,225,230)），所以字清不清楚只取决于它背后的背景对比。",
+      "states": {
+        "idle": { "tint": "rgba(24, 21, 18, .30)", "blur": 0, "surf": 1, "measured": "打字区背景 busy 1.235、spread 39.0" },
+        "hover": { "tint": "rgba(22, 19, 17, .62)", "blur": 4, "surf": 0.3, "measured": "打字区背景 busy 0.053、spread 11.0（背景被压平）" },
+        "focus": { "measured": "实测 focused=true 时材质与 idle **完全相同**（插件不监听 focus），所以这一态按 idle 的材质判" },
+        "typing": { "measured": "指针不在卡上时打字同样走 idle 材质；截图里正文清晰、无重影" }
+      },
+      "measured": "参照对比（同一水平带、同一张截图）：卡外未滤波壁纸 busy 3.85 / spread 53.6，卡内打字区 busy 1.235 / spread 39.0 —— 玻璃已经把背景乱度压掉约 2/3，剩下那点背景结构是壁纸本身、不是折射造成的。所以这一版**没有动底色**：加 tint 只会牺牲透明度而换不到可测的可读性提升。"
     }
   },
   "lifecycle": {

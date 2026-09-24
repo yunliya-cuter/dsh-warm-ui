@@ -29,6 +29,7 @@ DSH_NODE_EXE="/mnt/c/Program Files/nodejs/node.exe" DSH_URL="http://127.0.0.1:30
 | 挂载入口 | 没有裸的 `document.body/head.append`（页面外层节点必须走 `mountDetached` / `mountLayer` / `installStyleSheet`） |
 | 变量闭包 | 每张样式表引用的 CSS 变量都在**本表内**有定义（否则整条声明会被复位成 initial） |
 | 玻璃无动效 | 契约说 `glass.motion.state = none` 时，代码里不许再出现流动层的配方 / 噪声原语 / 开关 —— 按一张 15 行的**已删标识符表**逐个查（半删状态过得了 `node --check`，只有这张表拦得住） |
+| 底部曲率 | 契约 `glass.curvature` 里的每个设计数字（`slope` / `dispGain` / `bevel` / `shape` …）在代码里正好出现一次；槽位系数必须在登记的地板之上 —— 低于地板就是「把曲率调成看不见」来换可读性；折射路径与槽位表两行也必须在 |
 
 ## 2. 真机断言（需要 Windows 侧 Firefox）
 
@@ -61,6 +62,7 @@ node tools/check.mjs --browser
 | `probes/p0-hmr.js` | 热重载回归：数 `/plugins/events` 的 rebuilt 帧 + 每 3 秒取一次样本（`--hmr` 就是用它） |
 | `probes/p0-composer.js` / `p0-composer-set.js` | 量/写 DSH 自己的会话宽度偏好（判断"输入框变宽"到底是谁干的） |
 | `probes/engine-glass.js` / `glass-cost.js` | 玻璃的引擎能力矩阵、以及「给 Gecko 补元素级滤镜」这条替代路每帧要付多少（见第 5 节） |
+| `probes/curvature.js` | **底部曲率**：把当前卡片用的那条 `url(#…)` 滤镜的 `feImage` **位移图**解回来，逐像素反算 maxd、底边/顶边沿深度 0..24px 的 \|dy\| 剖面、带内每像素衰减（曲率）、透镜尾巴、B 通道弧峰值。这是量「曲率到底降了多少」的唯一口径 —— 按公式复算一遍等于又多一个会漂移的真相。**只在 Chromium 上有意义**（Gecko 不发 `url()`，会返回 `{ error: … }`）：先包成 `(async () => { … })()`，再 `cdp.mjs eval` |
 | `probes/dup-chip.js` | 重复胶囊回归：往 `.dpo-controls` 塞一颗**没有归属标记**的同类节点（= 旧版本遗留），每 250ms 数一次 `.wti-chip` —— 应当只在注入那一拍是 2，随后恒为 1 | Firefox：`harness.mjs eval`；Chromium：`cdp.mjs both`（先包成 `(async () => { … })()`） |
 | `probes/glass-zombie.js` | 僵尸世代回归：假 loader + 假 ctx 连挂**两代**（`effect` 不给卸载，等价于热重载漏掉了旧实例），在输入卡片上打 120 发指针风暴，按阶段数 DOM 变更、按来源归因（`.wti-chip` 删插 / 属性重复写），最后把 `elementFromPoint` 换成必抛来验"出错自我卸载" | 同上；判定看**静置段**（改完应为 0），另看 `throwOnce`：未被捕获错误 0、`console.error` 恰好 1 条、`__dshWarmExtra.glass.alive === false` |
 

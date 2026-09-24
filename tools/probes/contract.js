@@ -179,6 +179,36 @@ if (lifeState === "enforced") {
   else if (!(glassLife.generation >= 1)) violations.push("玻璃出口报 generation=" + glassLife.generation + "，应当 >= 1");
 }
 
+/* ── ⑪ 底部曲率：引擎无关的那一半（画出来的弧 / 圆角 / 底色） ───────────────
+ *
+ * 用户 2026-09-25 报「输入框玻璃底部曲率过大」，修法是把折射的位移幅度折下来 —— 而
+ * 折射在 Gecko 上根本不发（GLASS_BACKDROP_ENGINES: svgFilter false），所以**实际降了
+ * 多少**只能在 Chromium 侧量（tools/probes/curvature.js 读的是渲染真正用的那张位移图）。
+ *
+ * 这一项守的是另外那一半，它们在两种引擎上都能问：画弧用的 5 层内阴影、圆角、底色
+ * 有没有被"顺便改小"—— 也就是**不许拿曲率换可读性**：折射可以调小，弧不能消失。
+ */
+const curvatureState = (((C.glass || {}).curvature) || {}).state || null;
+const cardShadow = card ? getComputedStyle(card).boxShadow : "";
+const arcInsets = (cardShadow.match(/inset/g) || []).length;
+const arcRadius = card ? parseFloat(getComputedStyle(card).borderTopLeftRadius) : null;
+const idleTint = card ? card.style.getPropertyValue("--wta-glass-tint-cur").trim() : null;
+if (curvatureState === "enforced") {
+  const want = (C.glass.curvature || {});
+  if (arcInsets < (want.arcInsetLayers || 0)) {
+    violations.push("契约说底部曲率 enforced（弧必须还在），但卡片只有 " + arcInsets + " 层 inset（应 ≥ " + want.arcInsetLayers + "）—— 画弧的层被删了");
+  }
+  if (!/rgba\(255,\s*255,\s*255/.test(cardShadow) || !/rgba\(0,\s*0,\s*0/.test(cardShadow)) {
+    violations.push("画弧的内阴影少了亮线或暗线（弧不能靠“淡到看不见”来降）：" + cardShadow);
+  }
+  if (arcRadius !== want.arcRadiusPx) {
+    violations.push("卡片圆角是 " + arcRadius + "px，契约记的是 " + want.arcRadiusPx + "px（弧的几何变了就要先改契约）");
+  }
+  if (idleTint !== want.idleTint) {
+    violations.push("常态底色是 " + idleTint + "，契约记的是 " + want.idleTint + "（改底色 = 改文字与背景的对比，必须先登记）");
+  }
+}
+
 return {
   measured: {
     state,
@@ -197,6 +227,7 @@ return {
     glassMotion: { state: motionState, noise: noisePrims, flowDisplacement: flowDisps, bodyFlag: flowFlag },
     chips: { byClass: chipsByClass, marked: chipsMarked },
     glassLife: glassLife ? { alive: glassLife.alive, generation: glassLife.generation } : null,
+    glassArc: { insets: arcInsets, radius: arcRadius, tint: idleTint },
     viewport: window.innerWidth + "x" + window.innerHeight,
   },
   violations,

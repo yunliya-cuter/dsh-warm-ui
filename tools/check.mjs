@@ -23,6 +23,8 @@
  *  10. 探针      —— tools/probes/*.js 按 harness 的包装能解析（它们是函数体，不是独立脚本）
  *  11. 玻璃无动效 —— 契约说 glass.motion.state = none 时，代码里不许再出现流动层的配方/原语/开关
  *                     （按"已删标识符表"逐个查，半删状态也算红）
+ *  12. 底部曲率 —— 契约 glass.curvature 的设计数字与代码里那一处相等，且系数不许低到
+ *                   "把曲率调成看不见"；折射路径与槽位表两行必须在（不许拿曲率换可读性）
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -334,6 +336,60 @@ function checkGlassMotion() {
 	}
 }
 
+/* ── 12. 底部曲率：数字与契约一致，而且不许被"调成看不见"换可读性 ──────────
+ *
+ * 2026-09-25 用户报「输入框玻璃底部曲率过大」。修法是把底边折射带里的位移幅度折下来
+ * （slope ×0.6，只作用于输入框卡片槽位），而**不是**把曲率做没：弧的几何（bevel /
+ * shape / edgeW / rim / shade / light）与画弧用的 5 层内阴影一字不动。
+ *
+ * 这一条守的就是那个"不是"：
+ *   ① 契约里的每个设计数字在代码里**恰好出现一次**（一处定义 = 一个含义）——
+ *      系数写成 `slope: 0.6` 这种严格字面量，不然 `\d+` 会把 0.6 误配成 0；
+ *   ② 系数必须落在 [地板, 1)：低于地板 = 把曲率调成看不见，等于 1 / 整行没了 = 修复被无声撤销；
+ *   ③ 折射路径还在（不许靠删滤镜换可读性）；
+ *   ④ 槽位表两行都在：改动只作用于输入框卡片，任务面板保持基准材质。
+ * 折射**实际降了多少**只能在 Chromium 侧量（读渲染真正用的那张位移图，见
+ * tools/probes/curvature.js）；真机那一半（画出来的弧、圆角、底色）由
+ * tools/probes/contract.js 第 ⑪ 段断言。
+ */
+function checkGlassCurvature() {
+	const spec = contract.packages["dsh-warm-ui"];
+	const cur = contract.glass && contract.glass.curvature;
+	if (!spec || !cur) {
+		add("底部曲率", "契约里缺 glass.curvature（曲率怎么调、调到多少必须是一条登记过的事实）");
+		return;
+	}
+	const code = read(spec.entry);
+	for (const row of cur.designNumbers || []) {
+		const hits = code.split(row.needle).length - 1;
+		if (hits !== 1) {
+			add("底部曲率", row.needle + " 在 " + spec.entry + " 里出现 " + hits + " 次（应恰好一次：一处定义 = 一个含义）");
+		}
+	}
+	/* 每个"槽位系数"都要有自己的地板：没有地板 = 没人登记这个旋钮能被调到多小。 */
+	const floors = cur.floors || {};
+	let floored = 0;
+	for (const row of cur.designNumbers || []) {
+		const lo = floors[row.name];
+		if (lo === undefined) continue;
+		floored++;
+		if (!(row.value < 1 && row.value >= lo)) {
+			add("底部曲率", row.name + " 的系数是 " + row.value + "，契约要求落在 [" + lo + ", 1) —— 低于地板等于把曲率调成看不见，等于 1 等于没改");
+		}
+	}
+	if (floored !== Object.keys(floors).length) {
+		add("底部曲率", "契约 floors 有 " + Object.keys(floors).length + " 条，只有 " + floored + " 条对上了 designNumbers —— 地板必须挂在真实存在的设计数字上");
+	}
+	for (const needle of cur.refractionPath || []) {
+		if (!code.includes(needle)) {
+			add("底部曲率", spec.entry + " 里找不到 " + needle + "（折射路径不许靠删滤镜换可读性）");
+		}
+	}
+	if (!/variant:\s*"composer"/.test(code) || !/variant:\s*""/.test(code)) {
+		add("底部曲率", "GLASS_TARGETS 少了槽位行（composer 变体行 / 任务面板基准行）—— 改动必须只作用于该输入框");
+	}
+}
+
 /* ── 热重载回归（--hmr）：改一次文件 → 插件重建 → 再量一遍 ─────────────
  *
  * 为什么值得专门做一条命令：这一轮两个 bug（壁纸被推到页面下面、工具行变回原样）
@@ -499,6 +555,7 @@ const checks = [
 	["共享依赖", checkRequires],
 	["探针", checkProbes],
 	["玻璃无动效", checkGlassMotion],
+	["底部曲率", checkGlassCurvature],
 ];
 for (const [label, run] of checks) {
 	const before = findings.length;
