@@ -143,29 +143,20 @@
     "measuredAgainst": "dsh-client-ui-conversation/lib/client.js 的 WIDTH_PREF_KEY / resolveContentWidth / uV2eYG_card"
   },
   "glass": {
-    "meaning": "液态玻璃：折射 + 边缘光 + 表面反射，外加一层随时间流动的位移（让静止时也看得出在动）",
+    "meaning": "液态玻璃：折射 + 边缘光 + 表面反射。**不做动效** —— 玻璃上没有任何随时间变化的位移",
     "targets": [
       "[data-slot=\"conversation.composer.bar\"] [class*=\"_card\"]",
       "[data-slot=\"conversation.input.dock\"] [class*=\"_root\"]"
     ],
-    "warp": {
-      "meaning": "流动层：叠一条随时间变化的低频噪声位移；幅度远小于折射，所以字仍清楚，但一直在缓慢游动",
-      "extraKey": "glassWarp",
-      "recipe": "ripple",
-      "amp": 4.2,
-      "period": 9,
-      "fps": 20,
-      "ampSwing": 0.6,
-      "freqSwing": 0.45,
-      "engineFlag": "warp",
-      "engineSupport": {
-        "gecko": false,
-        "chromium-webkit": true
-      },
-      "offBehavior": "不给滤镜链加任何原语 —— 画面与没有这一层时逐像素相同（Firefox / reduce / 开关关掉都走这条）",
-      "reducedMotion": "prefers-reduced-motion: reduce 时驱动不写属性（滤镜保持建好时的静态值）",
-      "fadeFactor": 2.5,
-      "edgeMask": "框边一圈不加噪声：遮罩按几何生成（框边 0、离框 max(bevel, amp×fadeFactor) 以内 1），否则双向噪声会采到元素框外、把那一条背景拉成条纹"
+    "motion": {
+      "state": "none",
+      "meaning": "原来这里有一层「流动层」：叠一条随时间变化的低频噪声位移（GLASS_WARP 配方 + 定时器驱动 baseFrequency/scale），叠在折射之上。2026-09-24 按用户要求整层删除（原话：「消除输入框边缘波纹动效」「不要用另一套动效替代」）。删的是实现，不是显示：滤镜图里不再有 feTurbulence/驱动属性，body 上不再有 data-wta-glasswarp，EXTRA_DEFAULTS 里不再有 glassWarp。",
+      "codeGuards": [
+        "玻璃滤镜图里不得再出现 feTurbulence",
+        "body 上不得再出现 data-wta-glasswarp",
+        "EXTRA_DEFAULTS 里不得再出现 glassWarp"
+      ],
+      "measured": "同一张卡片两相位差分（1752×830，Chromium）：壁纸开着时上沿带 5.73；把流动层驱动冻住后仍有 5.43；把壁纸那层藏掉后只剩 0.23。即卡片边缘的「动」绝大部分来自会动的壁纸透过玻璃，玻璃自身那点动才是被删掉的流动层 —— 删掉后壁纸那部分照旧可见（那是壁纸本身，不是玻璃的动效）。"
     }
   },
   "invariants": {

@@ -52,7 +52,6 @@ DSH 的配色是两级变量：`--dsw-static-*`（色阶）→ `--dsw-alias-*`�
 | 字色 | 0 冷（贴近 DSH 默认灰） | `dsh-warm-tint` | 看着眼熟、最不容易累；暖色文字会发涩 |
 | 加粗 | 1 暖·极弱 | `dsh-warm-bold` | 见下 |
 | 标题 | 4 中性纯灰·更暗 −20% | `dsh-warm-heading` | 见下 |
-| 玻璃流动 | 1 开 | `dsh-warm-x-glassWarp` | 玻璃底下的内容持续轻微游动；`0` = 只有静止的折射 |
 
 ### 面亮：白天 / 夜间
 
@@ -160,12 +159,14 @@ webserver 按请求读盘，服务端只在 HMR 里按内容变更推送）。
 
 ```bash
 node tools/check.mjs              # 静态：语法 / 样式归属 / 客户端插件形状 / 注入登记 / 挂载入口 /
-                                  #       变量闭包 / 契约数字 / 共享依赖 / 探针可解析 / 动效门槛
+                                  #       变量闭包 / 契约数字 / 共享依赖 / 探针可解析 / 玻璃无动效
 node tools/check.mjs --browser    # 追加真机断言（需要 Windows 侧 Firefox + Marionette，见 tools/README.md）
 ```
 
-Chromium 侧那两件事（玻璃底下的东西**被扭**、以及它**在动**）要另跑两个探针，
-命令与读法写在 `tools/README.md` 第 5 节；参考图在 `contract/refs/glass-warp-phase-*.png`。
+玻璃**不做动效**（2026-09-24 按用户要求删掉了「流动层」，见 `contract/ui-contract.md` 第 6 节）：
+现在只有静止的折射 + 边缘光 + 表面反射。想确认
+「这台引擎到底吃不吃 backdrop 里的 SVG 滤镜」，跑 `tools/probes/engine-glass.js`
+（Firefox 不吃，所以那边只有 blur/tint），命令见 `tools/README.md` 第 5 节。
 
 **「UI 应该长什么样」写在一份契约里**（`contract/ui-contract.json` 机器可读 +
 `contract/ui-contract.md` 人读版）：工具行三态的外观、行高、注入节点的登记表、

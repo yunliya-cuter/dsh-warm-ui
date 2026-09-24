@@ -132,34 +132,37 @@ for (const [pkg, spec] of Object.entries(C.packages)) {
   }
 }
 
-/* ── ⑨ 流动层的引擎门槛：这台引擎上"该不该有流动层"必须与契约一致 ─────────
+/* ── ⑨ 玻璃不做动效 + 工具行只有一颗胶囊 ──────────────────────────────────
  *
- * 契约的 `glass.warp.engineSupport` 给每条引擎配方一个 true/false，代码里
- * `GLASS_BACKDROP_ENGINES` 的 `warp` 列照它写；静态检查核对"代码 == 契约"，
- * 这里核对**运行时真的按它走了**：Gecko 上玻璃滤镜里不该出现 feTurbulence
- * （引擎表说它吃不下 backdrop 里的 SVG 滤镜，加了也只是白算一遍）。
- * 另外两半（Chromium 上确实有、以及它确实在动）由 Edge 侧的
- * `tools/probes/glass-warp.js` 量 —— 文件头写了怎么跑。
+ * 用户 2026-09-24 报两件事并要求"直接去掉 / 只留一个"：输入框边缘的波纹动效、
+ * 输入框下方重复的「优化」胶囊。波纹动效的来源是原来的「流动层」（噪声位移 +
+ * 定时驱动），已整层删除；静态那一半（代码里不许再有配方/原语/开关）由
+ * `tools/check.mjs` 的「玻璃无动效」守，这里核对**运行时也真的没有**：
+ *   - 玻璃滤镜 svg 里 0 个 feTurbulence（这层唯一的噪声源）
+ *   - body 上没有 data-wta-glasswarp（开关标记要一起删）
+ *   - 工具行里 .wti-chip 恒为 1（多出来那颗是旧版本遗留、没有归属标记的同类节点）
  */
 const glassSvg = document.querySelector("[data-wta-glass-svg]");
 const engineName = (() => {
   try { return CSS.supports("-moz-appearance", "none") ? "gecko" : "chromium-webkit"; } catch { return "unknown"; }
 })();
-const warpSupport = ((C.glass || {}).warp || {}).engineSupport || {};
-const warpNoise = glassSvg ? glassSvg.querySelectorAll("feTurbulence").length : null;
-const warpDisp = glassSvg
+const motionState = ((C.glass || {}).motion || {}).state || null;
+const noisePrims = glassSvg ? glassSvg.querySelectorAll("feTurbulence").length : null;
+const flowDisps = glassSvg
   ? [...glassSvg.querySelectorAll("feDisplacementMap")].filter((d) => d.getAttribute("in2") === "warpNoise").length
   : null;
-if (glassSvg) {
-  const shouldBeOn = warpSupport[engineName] === true;
-  if ((warpNoise > 0) !== shouldBeOn) {
-    violations.push("流动层在 " + engineName + " 上的状态与契约不符：滤镜里 feTurbulence 有 " + warpNoise
-      + " 个，契约说" + (shouldBeOn ? "该开" : "该关"));
-  }
-  if (warpNoise !== warpDisp) {
-    violations.push("流动层的原语不成对（feTurbulence " + warpNoise + " / 位移 " + warpDisp + "）：噪声源接不上位移就等于白算");
-  }
+const flowFlag = document.body.hasAttribute("data-wta-glasswarp");
+if (motionState === "none") {
+  if (noisePrims) violations.push("契约说玻璃不做动效，但滤镜里还有 " + noisePrims + " 个 feTurbulence（流动层没删干净）");
+  if (flowDisps) violations.push("滤镜里还有流动层的位移（in2=warpNoise 的 feDisplacementMap " + flowDisps + " 个）");
+  if (flowFlag) violations.push("body 上还挂着 data-wta-glasswarp（流动层的开关标记没删干净）");
+} else if (motionState === null) {
+  violations.push("契约里缺 glass.motion.state —— 玻璃动不动必须是一条登记过的事实");
 }
+const chipsByClass = count(".wti-chip");
+const chipsMarked = count("[data-dsh-warm-collapse]");
+if (chipsByClass !== 1) violations.push("工具行里 .wti-chip 有 " + chipsByClass + " 颗，只该有一颗");
+if (chipsMarked !== 1) violations.push("带归属标记的胶囊有 " + chipsMarked + " 颗，只该有一颗");
 
 return {
   measured: {
@@ -176,7 +179,8 @@ return {
     defaultCap,
     bootIds,
     engine: engineName,
-    glassWarp: { noise: warpNoise, displacement: warpDisp },
+    glassMotion: { state: motionState, noise: noisePrims, flowDisplacement: flowDisps, bodyFlag: flowFlag },
+    chips: { byClass: chipsByClass, marked: chipsMarked },
     viewport: window.innerWidth + "x" + window.innerHeight,
   },
   violations,
