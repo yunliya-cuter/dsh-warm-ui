@@ -447,6 +447,30 @@ function checkGlassPointer() {
 			}
 		}
 	}
+	/* 指针离开事件同理：坐标在视口内（假离开）只许重算，在视口外（真离开）才清坐标。
+	   判据写法写在契约 glass.pointer.leaveHandler，这里核对它还在。 */
+	const leave = p.leaveHandler || {};
+	if (!leave.head) {
+		add("悬停判定", "契约 glass.pointer.leaveHandler 缺 head（指针离开必须有登记过的真假判据）");
+	} else {
+		const at = code.indexOf(leave.head);
+		if (at === -1) {
+			add("悬停判定", spec.entry + " 里找不到「指针离开」处理器 " + JSON.stringify(leave.head));
+		} else {
+			const end = code.indexOf("\n\t\t\t};", at);
+			const body = end === -1 ? code.slice(at) : code.slice(at, end);
+			for (const needle of leave.must || []) {
+				if (!body.includes(needle)) {
+					add("悬停判定", "「指针离开」处理器体内缺 " + JSON.stringify(needle) + "（事件坐标必须参与判定）");
+				}
+			}
+			for (const needle of leave.mustNot || []) {
+				if (body.includes(needle)) {
+					add("悬停判定", "「指针离开」处理器体里出现了 " + JSON.stringify(needle) + "（契约 glass.pointer.leaveHandler.mustNot）");
+				}
+			}
+		}
+	}
 	/* 悬停那一档的底色是"眼睛看得到的状态量"：契约登记一个值，代码里只许有一处定义。 */
 	if (p.calmTint) {
 		const hits = code.split(p.calmTint).length - 1;

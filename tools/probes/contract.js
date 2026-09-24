@@ -236,7 +236,7 @@ if (card && pointerState === "enforced") {
   });
   const box = card.getBoundingClientRect();
   const at = { clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 };
-  hoverProbe = { hover: null, afterBlur: null, afterLeave: null };
+  hoverProbe = { hover: null, afterBlur: null, afterLeaveIn: null, afterLeaveOut: null };
   window.dispatchEvent(new PointerEvent("pointermove", { clientX: at.clientX, clientY: at.clientY, bubbles: true }));
   await settle();
   hoverProbe.hover = { over: overNow(), tint: tintOf() };
@@ -249,11 +249,19 @@ if (card && pointerState === "enforced") {
   if (!hoverProbe.afterBlur.over || hoverProbe.afterBlur.tint !== want.calmTint) {
     violations.push("窗口失焦之后悬停态丢了（底色 " + hoverProbe.afterBlur.tint + "，应为 " + want.calmTint + "）—— 用户报的「鼠标在输入框上打字却变透明」就是这条：失焦被当成指针离开，而打字不会重算判定");
   }
-  document.documentElement.dispatchEvent(new PointerEvent("pointerleave", { bubbles: false }));
+  /* ③ 假离开：坐标仍在视口内（指针没动 / 被另一个进程的窗口盖住）—— 必须仍是悬停态 */
+  document.documentElement.dispatchEvent(new PointerEvent("pointerleave", { bubbles: false, clientX: Math.round(at.clientX), clientY: Math.round(at.clientY) }));
   await settle();
-  hoverProbe.afterLeave = { over: overNow(), tint: tintOf() };
-  if (hoverProbe.afterLeave.over || (idleTint && hoverProbe.afterLeave.tint !== idleTint)) {
-    violations.push("真离开文档之后没回常态（底色 " + hoverProbe.afterLeave.tint + "）—— 修「失焦误判」不能把 pointerleave 这条真离开也吃掉");
+  hoverProbe.afterLeaveIn = { over: overNow(), tint: tintOf() };
+  if (!hoverProbe.afterLeaveIn.over || hoverProbe.afterLeaveIn.tint !== want.calmTint) {
+    violations.push("坐标仍在视口内的 pointerleave（假离开）之后悬停态丢了（底色 " + hoverProbe.afterLeaveIn.tint + "，应为 " + want.calmTint + "）—— 用户报的「鼠标在输入框上打字却变透明」就是这个：状态交给了最后到达的那条事件");
+  }
+  /* ④ 真离开：坐标在视口外 —— 必须回常态（修假离开不能把真离开也吃掉） */
+  document.documentElement.dispatchEvent(new PointerEvent("pointerleave", { bubbles: false, clientX: -20, clientY: -20 }));
+  await settle();
+  hoverProbe.afterLeaveOut = { over: overNow(), tint: tintOf() };
+  if (hoverProbe.afterLeaveOut.over || (idleTint && hoverProbe.afterLeaveOut.tint !== idleTint)) {
+    violations.push("坐标在视口外的 pointerleave（真离开）之后没回常态（底色 " + hoverProbe.afterLeaveOut.tint + "）—— 修假离开不能把真离开也吃掉");
   }
   /* 收尾：指针放回卡片上，别让页面停在常态影响别的断言 */
   window.dispatchEvent(new PointerEvent("pointermove", { clientX: at.clientX, clientY: at.clientY, bubbles: true }));

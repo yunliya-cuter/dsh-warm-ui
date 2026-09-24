@@ -150,22 +150,39 @@
     ],
     "pointer": {
       "state": "enforced",
-      "meaning": "悬停判定 = 记住指针坐标 + document.elementFromPoint 命中测试（**不用 :hover**：DSH 按键时会重建卡片节点，节点一换 :hover 当场失效，要等下一次鼠标移动才恢复）。判据只有一条：**「指针离开文档」只认 documentElement 上的 pointerleave**；窗口失焦不许当成离开 —— 鼠标的物理位置在失焦前后一点没动，而打字不会重算判定，于是状态会一直粘在「指针不在卡片上」那一档，用户看到的就是「鼠标明明在输入框上，一打字输入框就由模糊态变透明，鼠标动一下才回来」（2026-09-25）。失焦只丢 hit 缓存，并按最后的坐标重算。",
+      "meaning": "悬停判定 = 记住指针坐标 + document.elementFromPoint 命中测试（**不用 :hover**：DSH 按键时会重建卡片节点，节点一换 :hover 当场失效）。两条「离开」事件**都按事件自带的坐标判真假，不按事件名** —— 浏览器在指针一动不动时会成串补发 pointerenter/pointerleave（用户 2026-09-25 的现场：13ms 内 20+ 条，focus 仍 true、按最后指针坐标的命中测试仍在卡片里、玻璃 alive），而「指针被另一个进程的窗口盖住」（输入法候选窗）也会来一条；信事件名就等于把状态交给最后到达的那一条。判据：**坐标仍在视口内 = 假离开**（坐标留着、按最后位置重算），**坐标在视口外 = 真离开**（清坐标回常态）。窗口失焦同样不算离开（鼠标物理位置没动），失焦只丢 hit 缓存并按最后的坐标重算。",
       "calmTint": "rgba(22, 19, 17, .62)",
       "must": [
         "document.documentElement.addEventListener(\"pointerleave\", onPointerGone)",
         "window.addEventListener(\"blur\", onWindowBlur)",
-        "window.removeEventListener(\"blur\", onWindowBlur);"
+        "window.removeEventListener(\"blur\", onWindowBlur);",
+        "const stillInViewport = event.clientX >= 0 && event.clientY >= 0",
+        "event.clientX <= root.clientWidth"
       ],
       "forbidden": [
         "window.addEventListener(\"blur\", onPointerGone)"
       ],
       "blurHandler": {
         "head": "const onWindowBlur = () => {",
-        "must": ["hit = null", "sync()"],
-        "mustNot": ["inside: false", "pointer ="]
+        "must": [
+          "hit = null",
+          "sync()"
+        ],
+        "mustNot": [
+          "inside: false",
+          "pointer ="
+        ]
       },
-      "measured": "无头 Chromium（与用户 Chrome 同引擎）+ 真鼠标真键盘，指针停在输入框上不动：悬停 → over=1 / 底色 rgba(22, 19, 17, .62) / blur(4px)；窗口失焦 → 改前 over=0 / .30 / blur(0)，改后仍 over=1 / .62 / blur(4px)；随后真点击回页面（坐标不变）与打 a、b、中文提交：改前全程 over=0，改后全程 over=1；真鼠标动 1px → over=1。打字能引起的一切变动都不复位（输入框失焦、输入框节点删除重插、整张卡片节点被替换成克隆节点，over 全程仍为 1）。相邻状态复验：真离开文档 pointerleave 仍回常态（.30 / blur 0），失焦与真离开叠加时真离开赢；输入法 composition 与提交不改判定；换节点后再失焦仍保持模糊。"
+      "leaveHandler": {
+        "head": "const onPointerGone = (event) => {",
+        "must": [
+          "stillInViewport",
+          "event.clientX",
+          "scheduleHover()"
+        ],
+        "mustNot": []
+      },
+      "measured": "无头 Chromium + 真鼠标真键盘。① 真假离开的判据（事件自带坐标）：真离开·跳跃式 pointerleave(1011,1200)、真离开·扫掠式 pointerleave(1011,854)（距最后一次 pointermove 仅 51ms），而视口内高只有 830 ⇒ 真离开的坐标落在视口外；假离开（指针没动 / 被别的窗口盖住）坐标仍在视口内。② 同一驱动改前改后：真离开·跳跃 / 扫掠都是 over=0 / .30 / blur(0)（真离开行为没变），假离开改前 over=0 / .30、改后 over=1 / .62 / blur(4px)，随后打字同样 over=1。③ 用户自己浏览器里的现场：over 翻 false 那一刻 focus=true、按最后指针坐标命中测试仍在卡片内、glass.alive=true —— 排除失焦与自我卸载两条路径，只剩「状态交给了最后到达的那条事件」。④ 相邻状态 13 拍全对：真离开仍回常态（.30 / blur 0，含「失焦 + 真离开」叠加时真离开赢）、假离开保持悬停、指针移到卡片外回常态 / 移回恢复、输入法 composition 与提交不改判定、卡片节点被整体替换后仍判定悬停。"
     },
     "motion": {
       "state": "none",
