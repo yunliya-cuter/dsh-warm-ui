@@ -273,7 +273,7 @@ if (card && pointerState === "enforced") {
  * 用户 2026-09-25 报「与背景不协调的黑色横带」。代码里两种暗带（座位全宽渐隐带 + 五族行内扫光）
  * 都已按用户要求移除，改成「行首闪烁橙点 + 文字水波」。这一项在真机里断言三件事：
  *   ① 座位的计算样式里**没有**任何背景画法（黑带不许回来，不管哪个相位）；
- *   ② 运行中的条目前缀有点：8px 圆、颜色不是透明、带闪烁动画（外加绝对定位 = 不吃排版）；
+ *   ② 运行中的条目前缀有点：6px 圆、颜色不是透明、带闪烁动画（外加绝对定位 = 不吃排版）；
  *   ③ 扫光确实关掉（::after content = none）、文字水波在跑且摘要与标题有相位差。
  * 为什么可以造一个 data-state="running" 的探针节点：插件的规则只看属性（[data-state="running"]、
  * 类名后缀 _row/_title/_summary），不看是不是 React 渲染的；真机像素证据（橙色团块落在
@@ -357,6 +357,54 @@ if (busySpec.state === "enforced") {
   stage.remove();
 }
 
+/* ── ⑭ 列表底边渐隐：原生「上色型」fade 被内容遮罩替换 ───────────────────
+ *
+ * 用户 2026-09-25 报「箭头指的两处有分割感」。定位：DSH 原生 .bhn1Oq_fade 的收尾色写死为
+ * **不透明**的 --dsw-specific-sidebar-fill，而壁纸插件把侧栏列改成半透明（--wlp-side =
+ * rgba(填充色, .34)）⇒ 带子最后一行不再等于周围的真实底色，底边留一条横向硬缝
+ * （合成底放大后实测：暗色 Δ7、亮色 Δ117）。
+ * 这一项在真机里断言：开档时——原生 fade 不再上色、内容容器有 24px 遮罩；关档时——两者都还原。
+ * **遮罩必须打在 _treeBody 上、且用子串匹配**（它带 bhn1Oq_wide 附加类，[class$=...] 会静静失效，
+ * 探针里复现过这个假阴性）。
+ */
+const listFadeSpec = C.listEdgeFade || {};
+let listEdgeProbe = null;
+if (listFadeSpec.state === "enforced") {
+  listEdgeProbe = {};
+  const on = document.documentElement.hasAttribute("data-dsh-warm-wallpaper-on");
+  listEdgeProbe.wallpaperOn = on;
+  const fade = document.querySelector('[class*="_fade"]');
+  const tbody = document.querySelector('[class*="_treeBody"]');
+  listEdgeProbe.hasFade = !!fade;
+  listEdgeProbe.hasTreeBody = !!tbody;
+  if (!fade || !tbody) {
+    violations.push("侧栏里找不到 " + (fade ? "" : "_fade ") + (tbody ? "" : "_treeBody")
+      + " —— 列表底边渐隐的宿主变了，契约 listEdgeFade 的 fadeSuffix/containerSuffix 要跟着改");
+  } else {
+    const fadeBg = getComputedStyle(fade).backgroundImage;
+    const tcs = getComputedStyle(tbody);
+    const mask = tcs.maskImage && tcs.maskImage !== "none" ? tcs.maskImage : tcs.webkitMaskImage;
+    listEdgeProbe.fadeBg = fadeBg;
+    listEdgeProbe.mask = mask;
+    const px = String((listFadeSpec.height || {}).px);
+    if (on) {
+      if (fadeBg !== "none") {
+        violations.push("壁纸开着，原生渐隐带还在上色（background-image = " + fadeBg
+          + "）—— 它的收尾色是不透明的侧栏填充色，底边会留一条硬缝（契约 listEdgeFade）");
+      }
+      if (!mask || mask === "none") {
+        violations.push("壁纸开着，内容容器没有遮罩（mask-image = " + mask + "）—— 内容不再渐隐");
+      } else if (String(mask).indexOf(px + "px") === -1) {
+        violations.push("遮罩里找不到 " + px + "px 的渐隐高度（mask-image = " + mask
+          + "）—— 契约 listEdgeFade.height 要求与原生 bhn1Oq_fade 同高");
+      }
+    } else {
+      if (mask && mask !== "none") violations.push("壁纸关着，内容容器还有遮罩（mask-image = " + mask + "）—— 关档必须与原生逐像素相同");
+      if (fadeBg === "none") violations.push("壁纸关着，原生渐隐带却不上色了 —— 关档必须与原生逐像素相同");
+    }
+  }
+}
+
 return {
   measured: {
     state,
@@ -378,6 +426,7 @@ return {
     glassArc: { insets: arcInsets, radius: arcRadius, tint: idleTint },
     glassHover: hoverProbe,
     busyIndicator: busyProbe,
+    listEdgeFade: listEdgeProbe,
     viewport: window.innerWidth + "x" + window.innerHeight,
   },
   violations,

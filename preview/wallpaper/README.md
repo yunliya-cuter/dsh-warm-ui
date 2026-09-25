@@ -80,6 +80,39 @@ DSH 暗色主题里，**四个铺满视口的面全是不透明的**：
   `_frame` = `rgb(20,20,20)`、`quietBars` = `rgb(26,26,26)`，
   与「没装这个插件」逐像素相同。
 
+### 2.1.1 侧栏半透明之后的连带账：列表底边那条原生渐隐带（2026-09-25）
+
+把侧栏改半透明会**破坏一个别人写死的假设**。DSH 的会话列表底部有一条原生渐隐带：
+
+```css
+.bhn1Oq_fade{height:24px;position:absolute;bottom:0;
+  background:linear-gradient(to bottom, transparent, var(--dsw-specific-sidebar-fill));}
+```
+
+它的收尾色是**不透明**的侧栏填充色 —— 侧栏不透明时它正好等于周围底色，看不出边界；一旦侧栏变成
+半透明（`--wlp-side`），带子最后一行就和周围差一截，底边留下一条**横向硬缝**（用户 2026-09-25 的
+标注图里那两处「分割感」就是它的上色段与那条边；亮色主题下同一条缝 Δ117）。所以这条带子也由本插件接管 ——
+**不是盖住，是换机制**：
+
+```css
+:root[data-dsh-warm-wallpaper-on] [class$="_sidebarCol"] [class*="_fade"] { background-image: none !important; }
+:root[data-dsh-warm-wallpaper-on] [class$="_sidebarCol"] [class*="_treeBody"] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+          mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+}
+```
+
+- 上色撤掉、改成**内容自己渐隐**：透出来的是与下方逐像素相同的底色，壁纸多亮都不会再有接缝。
+- 24px 与原生 `bhn1Oq_fade` 的 `height` 同高，常量只有一处（`LIST_EDGE_FADE.heightPx`），两条
+  `mask-image` 声明引用它。
+- **后缀必须用 `*=`**：遮罩宿主实测带附加类（`bhn1Oq_treeBody bhn1Oq_wide`），`[class$=...]` 匹配不到，
+  而且这种失效**不报错** —— 遮罩会静静地不生效（页内先验复现过）。
+- 只在 `data-dsh-warm-wallpaper-on` 下生效：关档时两条规则整条不生效，与原生逐像素相同
+  （回归实测：接缝区 0 像素不同）。
+- 静态守卫 `tools/check.mjs` 第 15 项、真机守卫 `tools/probes/contract.js` 第 ⑭ 段；A/B 数字与状态
+  覆盖（默认 / 悬停行 / 展开其余会话 / 滚到底 / 搜索）登记在 `contract/ui-contract.json` 的
+  `listEdgeFade.measured` 与 `STATE.md §0.11`。
+
 ### 2.2 没有 filter、没有 mix-blend-mode
 
 画布是 `body` 的直接子节点、`position:fixed; inset:0; z-index:-1`。

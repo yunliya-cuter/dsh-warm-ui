@@ -32,6 +32,7 @@ DSH_NODE_EXE="/mnt/c/Program Files/nodejs/node.exe" DSH_URL="http://127.0.0.1:30
 | 底部曲率 | 契约 `glass.curvature` 里的每个设计数字（`slope` / `dispGain` / `bevel` / `shape` …）在代码里正好出现一次；槽位系数必须在登记的地板之上 —— 低于地板就是「把曲率调成看不见」来换可读性；折射路径与槽位表两行也必须在 |
 | 悬停判定 | 契约 `glass.pointer`：悬停靠「指针坐标 + `elementFromPoint`」而不是 `:hover`；**真离开只认 `documentElement` 的 `pointerleave`**，窗口失焦走独立处理器、只丢命中缓存并按最后的坐标重算 —— 缺陷写法（`blur` 直接接 `onPointerGone`）不许再出现，它就是「鼠标在输入框上打字却变透明」。手感那一半（底色/模糊真变没变）在 `contract.js` 第 ⑫ 段 |
 | 进行中指示 | 契约 `busy`：座位不再画全宽渐隐带、五族行内扫光**整条关掉**（`content:none`）、运行条目前缀的橙点颜色**只有一处定义且不许写回 `:root`**（那一层取不到 `--dsw-*` 语义 token，`var()` 链失效会让整条 `background` 作废 ⇒ 点画出来是透明的，实测过）、闪烁/水波节奏必须等于契约里登记的数字。手感那一半（点真的在、水波真的动、零位移）在 `contract.js` 第 ⑬ 段 |
+| 列表底边渐隐 | 契约 `listEdgeFade`：原生 `.bhn1Oq_fade` 是「上色型」的（收尾色 = 不透明的 `--dsw-specific-sidebar-fill`），侧栏被改半透明后底边会留一条硬缝 —— 所以它的上色必须被撤掉、改成内容容器的 24px 遮罩；**后缀只能用子串匹配**（内容容器带 `_wide` 附加类，`[class$=...]` 会静静地失效）、两条规则都必须门控在 `:root[data-dsh-warm-wallpaper-on]` 下（关档要与原生逐像素相同）、24px 只能有一处定义。手感那一半在 `contract.js` 第 ⑭ 段 |
 
 ## 2. 真机断言（需要 Windows 侧 Firefox）
 

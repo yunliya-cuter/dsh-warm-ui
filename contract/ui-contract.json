@@ -280,6 +280,34 @@
     ],
     "measured": "无头 Chromium（1600×900、DPR 1）+ 真机同页面 A/B。① 归属：座位带（ab2-before→ab2-seat-off）座位区 28.73→30.33 Δ+1.60、卡外左侧 18.78→20.84 Δ+2.06、正文区 Δ+0.01（无副作用）；扫光（测台 on→off）测台区 47.26→49.31 Δ+2.05、工具行最暗 300px 窗口 +3.17（≈11%）。② 改造后（vb-busy.png）计算样式：座位 background none／点 ::before content \"\"、6×6px、border-radius 50%、background rgb(245,158,11)、left -11px、top 9px、position absolute、animation wta-busy-blink 1s alternate infinite（拍到的 opacity 0.386 = 正在闪）／扫光 ::after content none／_title animation wta-busy-wave 2.6s、_summary delay -0.4333s，三拍 transform 采样 = -0.136px / -0.999px / -0.606px（文字确实在起伏）。③ 零位移：同一行 非运行→运行→非运行，行与内层盒逐值相同 (512,300,846,24)。④ 像素：三条克隆行的行首各一颗（(501,309) / (501,341) / (501,373)）；bash 那颗当时还被它自身的 overflow 裁掉，见 ⑩。⑤ reduced-motion（Emulation.setEmulatedMedia）：::before 与 _title 的 animation-name 都变 none、点 opacity 1 仍可见。⑥ 亮色主题：seat.bg none、点在、水波在（--dsw-alias-state-warn-primary 亮暗都是 #f59e0b）。⑦ 爆炸半径穷举：全前端「选择器里带 _row/_root 的 :after」共 8 条 = 五族扫光 + 三族的 reduced-motion 兜底（tool 族原本缺兜底），所以 content:none 打不到别的东西。⑧ 一个坑（已修）：--wta-busy-dot 最初写在 :root 里，DSH 的语义 token 只定义在 body 上 ⇒ var() 链失效 ⇒ 点的背景整条声明作废、画出来是透明的；实测 getComputedStyle(html) 取 --dsw-alias-state-warn-primary 为空、body 里为 #f59e0b，所以颜色定义挂在 body 作用域。⑨ 真机运行态现场（新会话跑一条 bash sleep，`real-running2.png`）：真实运行行的 ::before = 8×8（当时尺寸）/ 50% / rgb(245,158,11) / left:-12px、::after content none、_title wta-busy-wave 2.6s（transform −0.805px）、_summary delay −0.4333s、座位 background none、phase active。⑩ 放开 bash 那条死裁剪之后：三条克隆行的行首各出现一颗橙点，零位移仍成立。⑪ 2026-09-25 用户要求「橙点小一点」：--wta-busy-dot-size 8px → 6px、--wta-busy-dot-out 12px → 11px（外挂距离跟着收 1px，点的**中心**仍在行首左侧 8px ⇒ 只变小、不挪位）；复测：::before = 6×6 / left -11px / top 9px / 圆 / rgb(245,158,11) / wta-busy-blink 1s alternate，像素团块 (501,309)-(506,314) / (501,341)-(506,346) / (501,373)-(506,378) 各 26px，零位移（行盒逐值相同）与 reduced-motion（animation none、opacity 1）仍成立。"
   },
+  "listEdgeFade": {
+    "state": "enforced",
+    "meaning": "会话列表底部那条**原生渐隐带**（.bhn1Oq_fade，DSH 侧定义在 dsh-client-ui-workspace/lib/client.js:1219）是「上色型」的：background 为 linear-gradient(to bottom, transparent, var(--dsw-specific-sidebar-fill))，收尾色 = **不透明**的侧栏填充色。壁纸插件把 [class$=\"_sidebarCol\"] 改成半透明（--wlp-side = rgba(填充色, .34)）之后，这条带子最后一行就不再等于它周围的真实底色 ⇒ 底边留下一条横向硬缝（2026-09-25 用户标注图里那两处「分割感」就是它的上色段与那条底边：device y≈723.5 单行跳变，左端止于 device x≈18 = CSS 12 = 原生 fade 的 left:0 + 侧栏 12px 内边距）。修法**不是盖住**：撤掉原生那层上色，改成给内容容器打一层同样 24px 的遮罩 —— 内容自己渐隐，透出来的是与下方逐像素相同的底色，不再依赖任何颜色 token。整组规则只在 :root[data-dsh-warm-wallpaper-on] 下生效 ⇒ 关档时与原生逐像素相同。",
+    "package": "dsh-warm-wallpaper",
+    "nativeRule": ".bhn1Oq_fade{left:0;right:var(--dsh-session-list-edge-inset);background:linear-gradient(to bottom, transparent, var(--dsw-specific-sidebar-fill));pointer-events:none;height:24px;position:absolute;bottom:0}",
+    "height": {
+      "constName": "LIST_EDGE_FADE",
+      "px": 24,
+      "why": "与 DSH 原生 bhn1Oq_fade 的 height 一致。数字只在常量里写一遍，两条 mask 声明都引用它。"
+    },
+    "fadeSuffix": "_fade",
+    "containerSuffix": "_treeBody",
+    "suffixMatch": "*=",
+    "suffixMatchWhy": "内容容器实测带附加类（bhn1Oq_treeBody bhn1Oq_wide），后缀匹配 [class$=...] 命中不到 —— 探针里已经复现过这个假阴性（maskOn=none），所以必须用子串匹配。",
+    "must": [
+      "const LIST_EDGE_FADE = { heightPx: 24 }",
+      ":root[${ON_ATTRIBUTE}] [class$=\"_sidebarCol\"] [class*=\"_fade\"] {",
+      "background-image: none !important;",
+      ":root[${ON_ATTRIBUTE}] [class$=\"_sidebarCol\"] [class*=\"_treeBody\"] {",
+      "-webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - ${LIST_EDGE_FADE.heightPx}px), transparent);",
+      "mask-image: linear-gradient(to bottom, #000 calc(100% - ${LIST_EDGE_FADE.heightPx}px), transparent);"
+    ],
+    "forbidden": [
+      "[class$=\"_fade\"]",
+      "[class$=\"_treeBody\"]"
+    ],
+    "measured": "A/B（1280×577、DPR 1；「合成暖底」= 藏掉画布换一块与用户截图同量级的暖底，接缝区合成值 34,32,30 ≈ 用户截图的 35,33,31，只为把接缝放到肉眼可见、不是修复手段）：① 暗色 改前 x=20..260 上下各 5 行中位差 Δ=(7,5,4)，逐行 y478=26,26,26 → y479=34,32,30（单行硬跳变）⇒ 改后 Δ=(0,0,0)、逐行连续（只剩 y481 起 ±1 抖动）。② 亮色 改前 Δ=(-109,-112,-117)（y478=220,222,227 → y479=101,100,99，亮暗断层）⇒ 改后 Δ=(0,0,0)。③ 真壁纸（不合成）：暗色 改前 Δmax 4（25,25,25 → 21,21,22）⇒ 改后 1~2；亮色 改前 Δmax 124（208,210,215 → 88,89,91）⇒ 改后 1~2。④ 状态覆盖（改后 + 合成底，x=8/20/250/275 四处全 Δ=(0,0,0)）：默认 / 悬停会话行 / 展开其余 23 个会话（会话行 6→29）/ 展开后滚到底（bhn1Oq_list.scrollTop 747）/ 搜索框展开。⑤ 关档回归（撤 ON 属性）：接缝区 (0..300 × 450..520) 逐像素 0 不同；全图仅 84 px 不同（0.0114%，包围盒 (23,247)-(234,286) = 会话行的相对时间文字，两次跑相隔一分钟，数字本就该变）。⑥ 计算样式对照：改前 fade.backgroundImage = linear-gradient(rgba(0,0,0,0), rgb(26,26,26))、mask = none、sidebarCol.background = rgba(26,26,26,0.34)；改后 fade.backgroundImage = none、mask = linear-gradient(rgb(0,0,0) calc(100% - 24px), rgba(0,0,0,0))。⑦ 亮色 token：--dsw-specific-sidebar-fill = #dfe1e6、--wlp-side = rgba(223,225,230,0.34)（按插件同一算法手工重算，因为切 body 属性不会触发它的重算观察器）。⑧ **真 DPR=2**（Edge `--force-device-scale-factor=2` + `Emulation.setDeviceMetricsOverride(deviceScaleFactor:2)`，页面自报 dpr 2、视口 1280×577 ⇒ 图 2560×1154、边缘在 y=958）：改前 x=40/120/240/400/520 五处 Δ 全为 (8,6,4) ⇒ 改后全为 (0,0,0)。"
+  },
   "lifecycle": {
     "meaning": "插件实例的生死规矩。热重载换掉的是**模块实例**：旧实例的 pointermove 监听、rAF、MutationObserver 都还在跑，而它的代码已经过期。所以「现在活着的是第几代」记在模块变量里是错的 —— 新模块从 0 开始数，两代互不认识。只有最新一代允许写页面；出事的那一代要能自我卸载，而不是每帧抛一次错。",
     "singleGeneration": {

@@ -98,6 +98,18 @@ window.__ModuleLoader__.load({
 		const SIDE = { alpha: 0.34, base: "#1a1a1a" };
 
 		/**
+		 * 会话列表底部那条**原生渐隐带**的几何。DSH 的实现是
+		 *   .bhn1Oq_fade{height:24px; position:absolute; bottom:0;
+		 *                background:linear-gradient(to bottom, transparent, var(--dsw-specific-sidebar-fill))}
+		 * —— 收尾色是**不透明**的侧栏填充色。本插件把 sidebarCol 改成半透明之后，
+		 * 这条带子最后一行的颜色就不再等于它周围的真实底色，底边会留下一条横向硬缝
+		 * （壁纸越亮越明显：用户标注图里那两处「分割感」就是它的上色段与底边）。
+		 * 做法不是"盖住"，而是**撤掉上色、改成内容自己渐隐**：同样 24px 的遮罩，
+		 * 透出来的就是与下方逐像素相同的底色，不再依赖任何颜色 token。
+		 */
+		const LIST_EDGE_FADE = { heightPx: 24 }; // 与 DSH 原生 bhn1Oq_fade 的 height 一致
+
+		/**
 		 * 画布挂在 body 上，必须是「铺满视口、且完全不参与排版」的一块。
 		 *
 		 * 它的定位平时由样式表给；这里再补一份**内联**的不变量，因为样式表是会被盖掉的
@@ -2655,6 +2667,20 @@ ${clearSurfaceSelector()} {
    这里的兜底值由 SIDE 表生成，不手写第二份。 */
 :root[${ON_ATTRIBUTE}] [class$="_sidebarCol"] {
   background-color: var(--wlp-side, ${withAlpha(SIDE.base, SIDE.alpha)}) !important;
+}
+/* 会话列表底部那条原生渐隐带（.bhn1Oq_fade）是"上色型"的：收尾色写死为不透明的
+   --dsw-specific-sidebar-fill。侧栏被本插件改成半透明后，它就不再等于周围的真实底色，
+   底边会留下一条横向硬缝（见 LIST_EDGE_FADE 的注释）。这里换成"内容自己渐隐"：
+   撤掉原生那层上色，改用同样 24px 的遮罩打在内容容器上 —— 透出来的是与下方
+   逐像素相同的底色，壁纸多亮都不会再有接缝。
+   注意 [class*="_treeBody"] 必须用 *=：该元素实测带附加类（bhn1Oq_treeBody bhn1Oq_wide），
+   后缀匹配 [class$=...] 命中不到（页内试验已经复现过这个假阴性）。 */
+:root[${ON_ATTRIBUTE}] [class$="_sidebarCol"] [class*="_fade"] {
+  background-image: none !important;
+}
+:root[${ON_ATTRIBUTE}] [class$="_sidebarCol"] [class*="_treeBody"] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - ${LIST_EDGE_FADE.heightPx}px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - ${LIST_EDGE_FADE.heightPx}px), transparent);
 }
 
 /* 侧栏底部三个入口各占一整行 */

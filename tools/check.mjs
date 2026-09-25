@@ -31,6 +31,10 @@
  *  14. 进行中指示 —— 契约 busy 在代码里成立：座位不再画全宽渐隐带、五族行内扫光全关、
  *                   点的颜色只有一处定义且**不许写回 :root**（那一层取不到 --dsw-* 语义
  *                   token，var() 链失效会让整条 background 作废 ⇒ 点画出来是透明的，实测过）
+ *  15. 列表底边渐隐 —— 契约 listEdgeFade 在代码里成立：原生 .bhn1Oq_fade 的上色被撤掉、
+ *                   改成内容容器的 24px 遮罩；后缀必须用子串匹配（内容容器带附加类，
+ *                   [class$=...] 会静静失效）；两条规则都门控在 :root[data-dsh-warm-wallpaper-on]
+ *                   下（关档要与原生逐像素相同）；24px 只有一处定义
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -702,6 +706,58 @@ function checkBusyIndicator() {
 	}
 }
 
+/* ── 15. 列表底边渐隐（契约 listEdgeFade）────────────────────────────── */
+/**
+ * 侧栏被壁纸插件改半透明之后，原生那条「上色型」渐隐带（.bhn1Oq_fade，收尾色是不透明的
+ * --dsw-specific-sidebar-fill）会在列表底边留下一条横向硬缝。契约把替代方案钉死在代码里：
+ * 一条常量 + 两条只在开档时生效的规则。这里查**能静态查的**（选择器形状、后缀匹配方式、
+ * 24 只写一遍、门控）；真机行为在 tools/probes/contract.js ⑭。
+ */
+function checkListEdgeFade() {
+	const spec = contract.listEdgeFade;
+	if (!spec) {
+		add("列表底边渐隐", "契约里缺 listEdgeFade（侧栏半透明后原生渐隐带怎么替代，必须是一条登记过的事实）");
+		return;
+	}
+	const pkg = contract.packages[spec.package];
+	if (!pkg) {
+		add("列表底边渐隐", "契约 listEdgeFade.package 指向 " + spec.package + "，但 packages 里没有这个包");
+		return;
+	}
+	const code = read(pkg.entry);
+	for (const needle of spec.must || []) {
+		if (!code.includes(needle)) {
+			add("列表底边渐隐", pkg.entry + " 里找不到 " + JSON.stringify(needle) + "（契约 listEdgeFade.must 登记过）");
+		}
+	}
+	for (const needle of spec.forbidden || []) {
+		if (code.includes(needle)) {
+			add("列表底边渐隐", pkg.entry + " 里还有 " + JSON.stringify(needle)
+				+ " —— 内容容器实测带附加类（bhn1Oq_treeBody bhn1Oq_wide），后缀匹配命中不到，遮罩会静静失效（契约 listEdgeFade.suffixMatchWhy）");
+		}
+	}
+	/* 24px 只写一遍：常量一处定义，两条 mask 声明都引用它 */
+	const h = spec.height || {};
+	if (h.constName && h.px) {
+		const def = "const " + h.constName + " = { heightPx: " + h.px + " }";
+		const n = code.split(def).length - 1;
+		if (n !== 1) add("列表底边渐隐", def + " 出现 " + n + " 次（应恰好一次：渐隐高度只能有一个定义处）");
+		const ref = "${" + h.constName + ".heightPx}";
+		const refs = code.split(ref).length - 1;
+		if (refs !== 2) add("列表底边渐隐", ref + " 被引用 " + refs + " 次（应为 2：-webkit-mask-image 与 mask-image 各一次）");
+	}
+	/* 门控：两条新规则都必须挂在开档属性下，否则关档（没装壁纸）时 UI 会变 */
+	const gate = ':root[${ON_ATTRIBUTE}] [class$="_sidebarCol"] ';
+	for (const suffix of [spec.fadeSuffix, spec.containerSuffix]) {
+		if (!suffix) continue;
+		const sel = '[class*="' + suffix + '"]';
+		const n = code.split(gate + sel).length - 1;
+		if (n !== 1) {
+			add("列表底边渐隐", gate + sel + " 出现 " + n + " 次（应恰好一次，且必须门控在 :root[${ON_ATTRIBUTE}] 下：关档要与原生逐像素相同）");
+		}
+	}
+}
+
 const checks = [
 	["语法", checkSyntax],
 	["样式归属", checkStyleOwnership],
@@ -716,6 +772,7 @@ const checks = [
 	["底部曲率", checkGlassCurvature],
 	["悬停判定", checkGlassPointer],
 	["进行中指示", checkBusyIndicator],
+	["列表底边渐隐", checkListEdgeFade],
 ];
 for (const [label, run] of checks) {
 	const before = findings.length;
