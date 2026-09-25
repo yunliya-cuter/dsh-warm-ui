@@ -364,7 +364,8 @@ POINTER-ENTER ×30+                                → OVER-FLIP over=true      
 - 扫光：`[data-state="running"] [class*="_row"]::after` ＋ `[data-state="running"][class*="_root"]::after`
   → `content: none !important`（**整条去掉**，不是停动画 —— 停住的 300px 暗块更难看）。
 - 进行中指示：`[data-state="running"]::before` 行首橙点（`--dsw-alias-state-warn-primary` = `#f59e0b`，
-  8px 圆、绝对定位、`wta-busy-blink` 1s alternate opacity .35→1 —— 与 DSH 输入框那颗 pending 点同规格）
+  6px 圆（2026-09-25 用户要求「小一点」，8px → 6px）、绝对定位、`wta-busy-blink` 1s alternate
+  opacity .35→1 —— 与 DSH 输入框那颗 pending 点同规格）
   ＋ `_title` / `_summary` 走 `wta-busy-wave`（2.6s，**与原扫光同频**，振幅 ±1px，摘要差半拍 ⇒ 波从左往右走）。
 - 新增增强项 `busy: 1`（`body[data-wta-busy]`）：关掉即回到 DSH 原生（扫光回来、无点无水波）。
 
@@ -374,15 +375,15 @@ POINTER-ENTER ×30+                                → OVER-FLIP over=true      
 | --- | --- |
 | 零位移 | 同一行 非运行→运行→非运行，行与内层盒逐值相同 `(512,300,846,24)` |
 | 座位带 | `background-image: none`；关掉它只影响座位区（座位区 Δ+1.60、卡外左侧 Δ+2.06、正文区 **Δ+0.01**） |
-| 橙点（像素级） | 三条克隆行行首各一颗 8×8：`(500,308)` / `(500,340)` / `(500,372)`（工具 / bash / 推理） |
-| 真机运行态 | 新会话跑 `bash sleep`，运行行 `::before` = 8×8 / `rgb(245,158,11)` / `left:-12px`，`::after content: none`，水波 2.6s，座位 `background-image: none`（`real-running2.png`） |
+| 橙点（像素级） | 三条克隆行行首各一颗 **6×6**：`(501,309)` / `(501,341)` / `(501,373)`（工具 / bash / 推理）。点的中心在行首左侧 8px —— 尺寸收小时外挂距离一起收 1px，中心没动 |
+| 真机运行态 | 新会话跑 `bash sleep`，运行行 `::before` = 8×8（当时尺寸，现 6px）/ `rgb(245,158,11)` / `left:-12px`，`::after content: none`，水波 2.6s，座位 `background-image: none`（`real-running2.png`） |
 | 扫光 | 五个族的 `::after` 都是 `content: none` |
 | 水波 | 三拍 `transform` = −0.136px / −0.999px / −0.606px（文字确实在起伏） |
 | reduced-motion | `animation-name` 全变 `none`、点 `opacity 1` 仍在 ⇒ 「动画停，但仍看得出进行中」 |
 | 亮 / 暗主题 | 都验过：`seat.bg none`、点在、水波在（`#f59e0b` 两个主题同值） |
 
 **真机（Firefox / Gecko）**：`--browser` 的 `busyIndicator` =
-`{seatBg:"none", dot:{8px/50%/rgb(245,158,11)/left:-12px/absolute/wta-busy-blink 1s/infinite/alternate},
+`{seatBg:"none", dot:{8px→6px/50%/rgb(245,158,11)/left:-12px→-11px/absolute/wta-busy-blink 1s/infinite/alternate},
 sweep:{content:"none"}, wave:{title 2.6s, summary delay −0.4333s}}`。
 
 **真机抓到的第二个事实（差点被当成"例外"放过去）**：跑 `bash` 的 `sleep` 时，
@@ -391,7 +392,7 @@ sweep:{content:"none"}, wave:{title 2.6s, summary delay −0.4333s}}`。
 而它自身 `overflow:hidden` 会把行首外挂的点一起裁掉。它裁的本是那条扫光（300px、从 `left:-300px`
 扫进来），扫光整条关掉后这层裁剪再无存在理由 ⇒ 放开 `overflow: visible`（不碰 padding / 间隙 /
 尺寸 ⇒ 零位移；对其他族无操作，实测它们的 root 本来就是 visible）。放开后像素复核：三条克隆行的
-行首各一颗 8×8 橙点（`(500,308)` / `(500,340)` / `(500,372)`），真机现场（新会话跑 `bash sleep`）
+行首各一颗 6×6 橙点（`(501,309)` / `(501,341)` / `(501,373)`，中心与 8px 版一致 = 只变小没挪位），真机现场（新会话跑 `bash sleep`）
 也拍到运行行的点、水波与「座位无底」。
 
 **范围边界（如实登记）**：流式正文 / 重试行 `[data-active]` / 等待确认不带 `data-state`，
