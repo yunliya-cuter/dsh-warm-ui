@@ -5,7 +5,7 @@
 > `/mnt/d/projects/_warmtheme_shots/wallpaper-preview/`。
 
 一句话：**一个插件、两种模式、可即时切换**的动态背景，铺满视口、待在所有 UI 面板后面，
-从「大面」透出来。默认「纸」。
+从「大面」透出来。默认「摩尔纹」。
 
 ---
 
@@ -20,7 +20,7 @@
 
 - 控件注册在 `sidebar.footer.action`，`id: dsh-warm-wallpaper-control`，`order: 30`
   （外观 10 / 提灯 20 / 壁纸 30，三个各占一整行，不挤）。
-- 选择记在 `localStorage["dsh-wallpaper-mode"]`，默认 `1`（纸）。
+- 选择记在 `localStorage["dsh-wallpaper-mode"]`，默认 `2`（摩尔纹）。
 - 脚本口：`window.__dshWallpaper.setMode(0|1|2)`、`.state()`、`.configure({...})`（后者只在 3082 调参用）。
 - **改了插件或 patch 之后要刷新浏览器**；摘/挂插件（patch 里的 insert 块）需要跑一次
   `start-preview.sh` 重启，**重启会换 token**。

@@ -10,7 +10,14 @@
  * 跑法：先跑本探针写值 → 再跑 p0-composer.js 量（每次 eval 都是一次全新页面加载，
  * 所以"写完立刻量"必须拆成两条）。
  * 要还原成"没有偏好"：URL 带 `#contentWidth=0` 再跑一次即可（非正数 = 无偏好）。
- */
+ 
+ *
+ * 为什么这里的代码是内联的：本文件**不是模块**，而是交给 tools/harness.mjs 的一段
+ * **函数体** —— harness 把它包成 `return (async () => { … })()` 用 Marionette 送进
+ * 真页面执行，所以它没有 import / require，也没有 node 的 fs / path。取值、常量、
+ * 判据只能就地写在这个文件里；凡是"数字与可见性"这类该由一处定义的期望值，一律
+ * 走契约（harness 注入为 window.__warmContract），本文件不手抄第二份。
+*/
 const KEY = "dsh.conversation.contentWidth";
 const m = String(location.hash).match(/contentWidth=(\d+)/);
 const value = m ? Number(m[1]) : 1200;

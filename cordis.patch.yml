@@ -1,0 +1,18 @@
+# dsh-warm-ui bundle 层：把自己插进组合树。
+#
+# 这个文件让本包成为一个**标准 DSH 插件包**：当包名被列进 profile 的
+# `dsh.profile.bundles` 时，DSH 会读取本补丁层并把下面这条 entry 插进根条目表 ——
+# 于是插件的 host 半边被加载，`dsh-client-modules` 又能扫描到它声明的
+# `dsh.client`，把 `./client` 半边发给浏览器。
+#
+# 为什么由包自己插入自己：本包只声明 `dsh.client`、没有别的 bundle 依赖，
+# 而 `dsh.profile.bundles` 里的包必须在自己的 `dsh.bundle.patch` 层里声明自己的
+# entry（与 @dsh-external/dsh-prompt-optimizer、@gbthui/dsh-auto-review 同一写法）。
+#
+# 装完之后 DSH 会**自动**把本包名写进 profile 的 `dsh.profile.bundles`
+# （见 dsh-app-boot 的 reconcileProfilePlugins："New bundle dependencies
+# activate automatically"），所以用户不需要手改任何配置文件。
+- insert:
+    - id: dsh-warm-ui
+      name: 'dsh-warm-ui'
+      config: {}

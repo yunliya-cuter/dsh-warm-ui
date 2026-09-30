@@ -35,6 +35,13 @@
  *                   改成内容容器的 24px 遮罩；后缀必须用子串匹配（内容容器带附加类，
  *                   [class$=...] 会静静失效）；两条规则都门控在 :root[data-dsh-warm-wallpaper-on]
  *                   下（关档要与原生逐像素相同）；24px 只有一处定义
+ *  16. 命令模式玻璃 —— 契约 glass.commandMenu 在代码里成立：/ 菜单靠厚底色而非 blur
+ *                   （卡片内部采不到页面背景），不透明度不低于契约地板
+ *  17. 卡片包含块 —— 契约 glass.containingBlock 在代码里成立：带 backdrop-filter 的元素会
+ *                   成为 fixed 后代的包含块，而 DSH 的 Tooltip 气泡正是 fixed 且渲染在卡片
+ *                   内部 ⇒ 模糊必须外置到卡片的**兄弟层**、卡片只留 isolation:isolate。
+ *                   守「只改登记的槽位」「卡片被显式置 none」「层插在卡片之前」
+ *                   （用户 2026-09-27 报的悬停抽搐就是这条被破坏）
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -487,6 +494,88 @@ function checkGlassPointer() {
 	}
 }
 
+/* ── 17. 卡片包含块：模糊不许留在会成为 fixed 后代包含块的那个元素上 ─────────
+ *
+ * 2026-09-27 用户报「右下角箭头/停止按钮亮起时，鼠标悬停其上画面反复切换」。
+ * 根因不在悬停逻辑，而在**模糊写错了元素**：带 backdrop-filter ≠ none 的元素会成为
+ * **固定定位后代的包含块**（CSS 规范），而 DSH 的 Tooltip 气泡（.bubble）正是
+ * position:fixed、却渲染在卡片**内部**。卡片一旦自己带 backdrop-filter，气泡的
+ * 视口 left/top 就被按卡片坐标系解释 ⇒ 落到视口外（实测 add 气泡 y=831，视口只有 802）
+ * ⇒ 撑出可滚动溢出 ⇒ 某些视口高度下冒出横向滚动条 ⇒ 卡片位移 2px ⇒ 指针被甩出按钮
+ * ⇒ mouseleave ⇒ 气泡撤销 ⇒ 回弹 ⇒ 自激（实测翻转 17 次 / 4.8s，周期 ≈267ms）。
+ *
+ * 这一项守四件事：
+ *   ① 契约登记的 layerTargets（要外置模糊的槽位）在 GLASS_TARGETS 里带 layer: true；
+ *      其余槽位**不许**带 —— 「只改该输入框」是用户给的约束，顺手全局改是回归；
+ *   ② 模糊必须写到层上、卡片必须被显式置 none（不是"没写"，是"写了 none"：
+ *      没写的话 DSH 自己的规则或残留内联会把它带回来）；
+ *   ③ 卡片必须带 isolation:isolate（它不是包含块、也不截断 backdrop 采样，但保住
+ *      层叠上下文，[data-wta-surf] 的 z-index:-1 + mix-blend-mode:screen 靠它成立）；
+ *   ④ 层必须是**兄弟**（插在卡片之前）—— 若改成卡片的子节点，包含块问题原样回来。
+ *
+ * 为什么不能只靠"看起来不抖了"：抽搐是自激，视口高度不同触发条件也不同（实测某些
+ * 高度下滚动条没变、照样抖）。这一项查的是**机制**，与视口无关。
+ */
+function checkGlassContainingBlock() {
+	const spec = contract.packages["dsh-warm-ui"];
+	const cb = contract.glass && contract.glass.containingBlock;
+	if (!spec || !cb) {
+		add("卡片包含块", "契约里缺 glass.containingBlock（模糊为什么不能写在卡片上，必须是一条登记过的事实）");
+		return;
+	}
+	if (cb.state !== "enforced") return;
+	const code = read(spec.entry);
+
+	/* ① 契约登记要外置模糊的选择器，代码里那一行必须带 layer: true。 */
+	const layerSels = cb.layerTargets || [];
+	if (!layerSels.length) {
+		add("卡片包含块", "契约 glass.containingBlock.layerTargets 是空的 —— 这一项就失去了核对对象");
+	}
+	for (const sel of layerSels) {
+		/* 表行形如 `{ sel: '<选择器>', variant: ..., layer: true }`：只认同一行内出现。 */
+		const line = code.split("\n").find((l) => l.includes(sel) && l.includes("sel:"));
+		if (!line) {
+			add("卡片包含块", spec.entry + " 的 GLASS_TARGETS 里找不到 " + JSON.stringify(sel) + "（契约 layerTargets 登记过）");
+		} else if (!/layer:\s*true/.test(line)) {
+			add("卡片包含块", spec.entry + " 里 " + JSON.stringify(sel)
+				+ " 这一行没有 layer: true —— 模糊又写回卡片上了，Tooltip 气泡会被挤到视口外（见契约 glass.containingBlock）");
+		}
+	}
+
+	/* ② 契约**没**登记的槽位不许带 layer：防"顺手全局改"。 */
+	const flagged = [...code.matchAll(/\{\s*sel:\s*('[^'\n]*'|"[^"\n]*")[^\n}]*layer:\s*true[^\n}]*\}/g)]
+		.map((m) => m[1].slice(1, -1));
+	for (const sel of flagged) {
+		if (!layerSels.includes(sel)) {
+			add("卡片包含块", spec.entry + " 里 " + JSON.stringify(sel)
+				+ " 带了 layer: true，但契约 layerTargets 没登记它 —— 加一处玻璃要同时改契约（用户约束是「只改该输入框」）");
+		}
+	}
+
+	/* ③ 契约 must 里登记的写法必须在代码里；forbidden 里的一律不许在。 */
+	for (const needle of cb.must || []) {
+		if (!code.includes(needle)) {
+			add("卡片包含块", spec.entry + " 里找不到 " + JSON.stringify(needle) + "（契约 glass.containingBlock.must 登记过）");
+		}
+	}
+	for (const needle of cb.forbidden || []) {
+		if (code.includes(needle)) {
+			add("卡片包含块", spec.entry + " 里还有 " + JSON.stringify(needle)
+				+ " —— 那是把模糊直接写在卡片上的写法（契约 glass.containingBlock.forbidden）");
+		}
+	}
+
+	/* ④ 层必须是兄弟：赋值语句里必须是 host.insertBefore(layer, el)。 */
+	if (!code.includes("host.insertBefore(layer, el)")) {
+		add("卡片包含块", spec.entry + " 里找不到 host.insertBefore(layer, el) —— 层必须插在卡片**之前**（兄弟）；"
+			+ "放进卡片内部等于让卡片自己再次成为 fixed 后代的包含块");
+	}
+	/* ⑤ rejected 至少留两条：那是"别再试这两条死路"的档，删掉就会被人重走。 */
+	if ((cb.rejected || []).length < 2) {
+		add("卡片包含块", "契约 glass.containingBlock.rejected 少于两条（子层 / ::before 两条死路的实测数字必须留档，否则会被重新试一遍）");
+	}
+}
+
 /* ── 热重载回归（--hmr）：改一次文件 → 插件重建 → 再量一遍 ─────────────
  *
  * 为什么值得专门做一条命令：这一轮两个 bug（壁纸被推到页面下面、工具行变回原样）
@@ -576,7 +665,10 @@ async function runHmr(env) {
 
 /* ── 真机断言（可选） ────────────────────────────────────────────────── */
 function browserEnv() {
-	const port = process.env.DSH_FF_PORT || "2828";
+	/* Marionette 端口默认值取自契约 `probes.ffPort`（与 tools/harness.mjs 同源）；
+	   环境变量仍优先 —— 换端口不需要改文件。契约里缺这一项时才退回字面量兜底。 */
+	const ffPort = (contract.probes && contract.probes.ffPort) || 2828;
+	const port = process.env.DSH_FF_PORT || String(ffPort);
 	const url = process.env.DSH_URL;
 	const nodeExe = process.env.DSH_NODE_EXE || process.execPath;
 	const windows = (p) => {
@@ -758,6 +850,125 @@ function checkListEdgeFade() {
 	}
 }
 
+/* ── 16. 探针端口只有一处定义（契约 probes.ffPort）─────────────────────
+ *
+ * Marionette 端口此前在 tools/harness.mjs 与 tools/check.mjs 里各写了一遍
+ * `2828`。两处都"能用"，所以不一致时不会报错，只会表现为"换了端口却连不上/
+ * 连到了别的实例"这类难查的现场。现在默认值只在契约里定义一次，两个文件都读它；
+ * 环境变量 DSH_FF_PORT 仍然优先（换端口不用改文件）。
+ *
+ * 这一条守的是"单一约定"：契约里必须有这个数，两个使用方都必须真的读它，
+ * 而且不许再出现裸的端口字面量作为默认值。
+ */
+function checkProbePort() {
+	const spec = contract.probes;
+	if (!spec || typeof spec.ffPort !== "number") {
+		add("探针端口", "契约里缺 probes.ffPort（Marionette 端口的默认值必须登记在一处）");
+		return;
+	}
+	const envName = spec.ffPortEnv || "DSH_FF_PORT";
+	for (const rel of spec.ffPortUsedBy || []) {
+		let code;
+		try {
+			code = read(rel);
+		} catch (error) {
+			add("探针端口", "probes.ffPortUsedBy 列了 " + rel + "，但读不到这个文件");
+			continue;
+		}
+		/* 必须真的引用契约字段，而不是自己再写一遍数字。 */
+		if (!/probes\s*&&\s*\w+\.probes|contract\.probes|\.probes\b/.test(code) || !code.includes(".ffPort")) {
+			add("探针端口", rel + " 没有从契约 probes.ffPort 取端口默认值（两处各写一遍就又出现第二处定义了）");
+		}
+		if (!code.includes(envName)) {
+			add("探针端口", rel + " 里找不到环境变量名 " + envName + "（契约说它可以覆盖默认端口）");
+		}
+		/* 裸字面量只能在**代码**里出现一次，且必须是 `|| <port>` 的兜底形状。
+		   注释里的示例不算数 —— 用法说明里出现端口是有意义的，所以先把注释剥掉。
+		   （注释剥离是粗粒度的：不支持字符串里的 `//`，本仓库工具脚本里没有这种写法。） */
+		const codeOnly = code
+			.replace(/\/\*[\s\S]*?\*\//g, "")
+			.split("\n").map((line) => line.replace(/\/\/.*$/, "")).join("\n");
+		const bare = codeOnly.split(new RegExp("\\|\\|\\s*" + spec.ffPort + "\\b")).length - 1;
+		const all = codeOnly.split(String(spec.ffPort)).length - 1;
+		if (bare > 1) {
+			add("探针端口", rel + " 里 " + spec.ffPort + " 作为兜底出现 " + bare + " 次（应至多一次）");
+		}
+		if (all - bare > 0) {
+			add("探针端口", rel + " 的**代码**里还有 " + (all - bare) + " 处裸端口字面量 " + spec.ffPort
+				+ "（默认值应读契约 probes.ffPort；兜底只允许一处，写成 `|| " + spec.ffPort + "`）");
+		}
+	}
+}
+
+/* ── 17. 命令模式菜单的厚玻璃（契约 glass.commandMenu）──────────────────
+ *
+ * 用户 2026-09-27 报「透明背景下命令模式（/）输入栏可读性差」，要求「改成与 goal 界面
+ * 一致的厚玻璃」。查证结论：**不能照抄 goal 的 blur** —— 菜单渲染在 composer 卡片内部，
+ * 卡片自己有 backdrop-filter、因而是 backdrop root，卡片内没有可采样的页面内容，
+ * 菜单自己的 backdrop-filter 贡献恒为 0（四组对照实测，见契约 glass.commandMenu.whyNotBlur）。
+ * 所以修法是"把底色做厚"，可读性只由那层不透明度决定。
+ *
+ * 这一条守三件事（都是"改回去就会重新看不清"或"改错地方会伤别人"）：
+ *   ① 三个设计数字在代码里**恰好各出现一次**（一处定义 = 一个含义）；
+ *   ② 底色不透明度不许低于契约的地板 —— 低于它，实心浅色背景上会掉回 AA 以下；
+ *   ③ 选择器必须锚在 [data-trigger-menu] 上。它是命令模式菜单的专属标记：
+ *      MenuSurface 还被 commands / model-selection / permission 等复用，
+ *      锚错（例如写 [data-menu-material]）就会把别的浮层一起改掉。
+ *      material 那一层的选择性停用也一并核对。
+ */
+function checkCommandMenuGlass() {
+	const cm = contract.glass && contract.glass.commandMenu;
+	if (!cm) {
+		add("命令模式玻璃", "契约里缺 glass.commandMenu（命令菜单怎么变可读、为什么不能靠 blur，必须是一条登记过的事实）");
+		return;
+	}
+	const spec = contract.packages["dsh-warm-ui"];
+	if (!spec) {
+		add("命令模式玻璃", "契约 packages 里没有 dsh-warm-ui");
+		return;
+	}
+	const code = read(spec.entry);
+
+	/* ① 设计数字恰好各出现一次 */
+	for (const row of cm.designNumbers || []) {
+		const hits = code.split(row.needle).length - 1;
+		if (hits !== 1) {
+			add("命令模式玻璃", row.needle + " 在 " + spec.entry + " 里出现 " + hits + " 次（应恰好一次：一处定义 = 一个含义）");
+		}
+	}
+
+	/* ② 不透明度地板 —— **从代码里取实际值**，不是读契约自己写的那个数。
+	   读契约等于"用契约检查契约"，代码真被改薄了它照样绿（这个坑踩过一次：
+	   变异测试把契约和代码一起改成 .45，这条检查没报）。 */
+	if (typeof cm.legibilityFloor === "number") {
+		const decl = code.match(/--wta-slash-fill:\s*rgba\([^)]*?,\s*([0-9.]+)\s*\)/);
+		if (!decl) {
+			add("命令模式玻璃", spec.entry + " 里找不到 --wta-slash-fill 的 rgba 声明（取不到实际不透明度，无法核对地板）");
+		} else {
+			const alpha = Number(decl[1]);
+			if (alpha < cm.legibilityFloor) {
+				add("命令模式玻璃", "--wta-slash-fill 在代码里的不透明度是 " + alpha + "，低于契约地板 " + cm.legibilityFloor
+					+ " —— " + (cm.legibilityFloorWhy || "再薄就会在实心浅色背景上掉回 AA 以下"));
+			}
+		}
+	}
+
+	/* ③ 选择器必须锚在命令菜单的专属标记上 */
+	if (cm.sel && !code.includes('body[data-wta-glass="1"] ' + cm.sel)) {
+		add("命令模式玻璃", spec.entry + " 里找不到门控规则 " + 'body[data-wta-glass="1"] ' + cm.sel
+			+ "（必须门控在开档属性下，且只作用于命令菜单）");
+	}
+	if (cm.sel && code.includes('body[data-wta-glass="1"] [data-menu-material]')) {
+		add("命令模式玻璃", spec.entry + " 里用了 [data-menu-material] —— 那是 MenuSurface 的通用标记，"
+			+ "commands / model-selection 等浮层也在用，会把它们一起改掉；命令菜单的专属标记是 " + cm.sel);
+	}
+	/* material 层必须被停用：留着它会和 .94 的底色叠成两层 */
+	if (!/\[data-trigger-menu\] > \[aria-hidden="true"\]:first-child/.test(code)) {
+		add("命令模式玻璃", spec.entry + " 里没有停用 MenuSurface 的 material 层（留着它会让底色叠两层，"
+			+ "实测 material 的 backdrop-filter 在该位置贡献恒为 0，没有保留价值）");
+	}
+}
+
 const checks = [
 	["语法", checkSyntax],
 	["样式归属", checkStyleOwnership],
@@ -773,6 +984,9 @@ const checks = [
 	["悬停判定", checkGlassPointer],
 	["进行中指示", checkBusyIndicator],
 	["列表底边渐隐", checkListEdgeFade],
+	["探针端口", checkProbePort],
+	["命令模式玻璃", checkCommandMenuGlass],
+	["卡片包含块", checkGlassContainingBlock],
 ];
 for (const [label, run] of checks) {
 	const before = findings.length;

@@ -10,57 +10,30 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="$(cd "$HERE/.." && pwd)"
-PREVIEW_HOME="${PREVIEW_HOME:-/mnt/d/projects/.dsh-warm-preview}"
-PATCH="$PREVIEW_HOME/profiles/web/cordis.patch.yml"
-BEGIN="# >>> dsh-warm-ui >>>"
-END="# <<< dsh-warm-ui <<<"
+# 共用常量 / patch 片段操作各只有一处定义（scripts/ 下），本脚本只调用。
+source "$SRC_DIR/scripts/warm-config.sh"
+source "$SRC_DIR/scripts/patch-block.sh"
+
+ID="dsh-warm-ui"
+PREVIEW_HOME="${PREVIEW_HOME:-$WARM_PREVIEW_HOME_DEFAULT}"
+PATCH="$PREVIEW_HOME/$WARM_PROFILE_SUBDIR/$WARM_PATCH_NAME"
 MODE="${1:-status}"
 
 [ -f "$PATCH" ] || { echo "找不到预览 patch：$PATCH" >&2; exit 1; }
 
-present() { grep -qF "$BEGIN" "$PATCH"; }
-
 case "$MODE" in
   on)
-    if present; then echo "本来就是开的，无需改动。"; exit 0; fi
-    cat >> "$PATCH" <<YAML
-
-$BEGIN
-- insert:
-    - id: dsh-warm-ui
-      name: $SRC_DIR/lib/index.js
-      config: {}
-$END
-YAML
+    if patch_block_present "$PATCH" "$ID"; then echo "本来就是开的，无需改动。"; exit 0; fi
+    patch_block_add "$PATCH" "$ID" "$SRC_DIR/lib/index.js"
     echo "已把 dsh-warm-ui 插回预览 profile —— 刷新浏览器即可看到暖色。"
     ;;
   off)
-    if ! present; then echo "本来就是关的，无需改动。"; exit 0; fi
-    python3 - "$PATCH" "$BEGIN" "$END" <<'PY'
-import sys
-path, begin, end = sys.argv[1], sys.argv[2], sys.argv[3]
-lines = open(path, encoding='utf-8').read().splitlines(keepends=True)
-out, skipping = [], False
-for line in lines:
-    if line.strip() == begin:
-        skipping = True
-        continue
-    if skipping and line.strip() == end:
-        skipping = False
-        continue
-    if not skipping:
-        out.append(line)
-while out and out[-1].strip() == '':
-    out.pop()
-text = ''.join(out)
-if not text.endswith('\n'):
-    text += '\n'
-open(path, 'w', encoding='utf-8').write(text)
-PY
+    if ! patch_block_present "$PATCH" "$ID"; then echo "本来就是关的，无需改动。"; exit 0; fi
+    patch_block_remove "$PATCH" plain "$ID"
     echo "已从预览 profile 摘掉 dsh-warm-ui —— 刷新浏览器即回到出厂配色。"
     ;;
   status)
-    if present; then echo "预览实例：暖色开（dsh-warm-ui 在 patch 里）"; else echo "预览实例：暖色关（出厂配色）"; fi
+    if patch_block_present "$PATCH" "$ID"; then echo "预览实例：暖色开（dsh-warm-ui 在 patch 里）"; else echo "预览实例：暖色关（出厂配色）"; fi
     ;;
   *)
     echo "用法：bash toggle-warm-ui.sh on|off|status" >&2

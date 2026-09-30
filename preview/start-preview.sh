@@ -6,11 +6,14 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PREVIEW_HOME="${PREVIEW_HOME:-/mnt/d/projects/.dsh-warm-preview}"
-PORT="${PREVIEW_PORT:-3082}"
+# 共用常量只有一处定义（scripts/ 下），本脚本只调用。
+source "$HERE/../scripts/warm-config.sh"
+
+PREVIEW_HOME="${PREVIEW_HOME:-$WARM_PREVIEW_HOME_DEFAULT}"
+PORT="${PREVIEW_PORT:-$WARM_PREVIEW_PORT_DEFAULT}"
 LOG="$PREVIEW_HOME/server.log"
 
-[ -d "$PREVIEW_HOME/profiles/web" ] || {
+[ -d "$PREVIEW_HOME/$WARM_PROFILE_SUBDIR" ] || {
   echo "预览 home 还不存在，先跑：bash $HERE/setup-preview-home.sh" >&2
   exit 1
 }

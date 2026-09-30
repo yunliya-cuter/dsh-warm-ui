@@ -8,7 +8,7 @@
  * 目标：侧栏左上角那一片
  *     鲸鱼图标 + "deepseek" 字标 + "HARNESS" 圆角徽章
  * 换成
- *     鲸鱼图标 + "deepsleep" 字标 + "狗圈" 圆角徽章
+ *     鲸鱼图标 + "deepsleep" 字标 + "遛狗绳" 文字徽章
  *
  * ── 探查结论（2026-09-13，on 3082，DOM 实测）─────────────────────────────
  *
@@ -75,7 +75,7 @@
  * 徽章右缘离折叠按钮（246）还有 40px 以上。
  *
  * 徽章保留原 rect（形状/圆角/底色/位置都不动），只把里面那 7 条大写字母隐藏，
- * 换成居中排的 SVG <text>狗圈</text>，fill 沿用原来那 7 条 path 用的
+ * 换成居中的 SVG `<text>遛狗绳</text>`，沿用原来那 7 条 path 用的
  * `var(--dsw-alias-label-primary-inverted)`，因此明暗两套主题下都自动是"反色"。
  *
  * ⚠️ 只改 DOM，不碰 React；React 若重挂这个 svg，MutationObserver 会重铺一遍。
@@ -99,7 +99,21 @@ window.__ModuleLoader__.load({
 		/* ── 文案 ─────────────────────────────────────────────────────────── */
 
 		const NEW_WORD = "deepsleep";
-		const NEW_BADGE = "狗圈";
+		const NEW_BADGE = "遛狗绳";
+
+		/** 徽章里的「遛狗绳」字号 / 字距 / 字重 / 字族。中文不像大写等宽那样靠字距排版，
+		    所以字距贴到几乎为零（0.5 只是为了抵掉一点次像素发虚），读起来才是一个词。 */
+		const BADGE_FONT_SIZE = 12;
+		const BADGE_LETTER_SPACING = 0.5;
+		const BADGE_FONT_WEIGHT = 600;
+		const BADGE_FONT_FAMILY =
+			'"Microsoft YaHei","PingFang SC","Noto Sans SC","Hiragino Sans GB","Source Han Sans SC",sans-serif';
+		/** 「遛狗绳」的光学居中微调（px，正数 = 右 / 下）。
+		    把文字按 `text-anchor=middle` + `dominant-baseline=central` 摆好后，**墨迹**
+		    的中心并不正好落在徽章矩形中心：8x 截图逐像素量出来偏左 0.6、偏下 0.75，
+		    这里补回来。改 BADGE_FONT_SIZE / BADGE_FONT_FAMILY 后要重新量。 */
+		const BADGE_NUDGE_X = 0.6;
+		const BADGE_NUDGE_Y = -0.75;
 
 		/* ── 原字标的排布（DOM 实测，别改）────────────────────────────────────
 		   8 个字形：左边距 0、字面宽 10.4、步进 12 → 字距 GAP = 1.6。 */
@@ -113,20 +127,6 @@ window.__ModuleLoader__.load({
 		/** 这个字体唯一的字距 = 右边距。'l' 的字格与 sprite 加宽量都从它派生。 */
 		const GAP = ADVANCE - GLYPH_W; // 1.6
 
-		/** 徽章里「狗圈」的字号 / 字距 / 字重 / 字族。中文不像大写等宽那样靠字距排版，
-		    所以字距贴到几乎为零（0.5 只是为了抵掉一点次像素发虚），读起来才是一个词。 */
-		const BADGE_FONT_SIZE = 12;
-		const BADGE_LETTER_SPACING = 0.5;
-		const BADGE_FONT_WEIGHT = 600;
-		const BADGE_FONT_FAMILY =
-			'"Microsoft YaHei","PingFang SC","Noto Sans SC","Hiragino Sans GB","Source Han Sans SC",sans-serif';
-		/** 「狗圈」的光学居中微调（px，正数 = 右 / 下）。
-		    把文字按 `text-anchor=middle` + `dominant-baseline=central` 摆好后，**墨迹**
-		    的中心并不正好落在徽章矩形中心：8x 截图逐像素量出来偏左 0.6、偏下 0.75
-		    （em 盒是居中的，但「圈」的墨比「狗」宽、CJK 墨迹在 em 盒里也不对称）。
-		    这里补回来。改 BADGE_FONT_SIZE / BADGE_FONT_FAMILY 后要重新量。 */
-		const BADGE_NUDGE_X = 0.6;
-		const BADGE_NUDGE_Y = -0.75;
 
 		/* ── 原字形索引 ───────────────────────────────────────────────────────
 		   key = path 的 d 里 "M" 后面那个数（足够区分这 9 条中的任意一条）。 */
@@ -286,7 +286,6 @@ window.__ModuleLoader__.load({
 				text.setAttribute("font-size", String(BADGE_FONT_SIZE));
 				text.setAttribute("font-weight", String(BADGE_FONT_WEIGHT));
 				text.setAttribute("letter-spacing", String(BADGE_LETTER_SPACING));
-				// 与原 HARNESS 那 7 条 path 同一个语义色 → 明暗主题都自动反色
 				text.setAttribute("fill", "var(--dsw-alias-label-primary-inverted)");
 				text.setAttribute(TEXT_ATTR, "");
 				text.textContent = NEW_BADGE;

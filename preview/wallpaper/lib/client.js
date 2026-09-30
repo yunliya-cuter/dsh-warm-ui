@@ -79,14 +79,14 @@ window.__ModuleLoader__.load({
 		const { createStyleInstaller, cssPropertyName } = require("dsh-warm-shared");
 		const installStyleSheet = createStyleInstaller(PACKAGE_ID);
 
-		/** 0 关 / 1 纸·纤维 / 2 摩尔纹。默认纸（用户的诉求就是「纸/纤维加个模糊」）。 */
+		/** 0 关 / 1 纸·纤维 / 2 摩尔纹。默认摩尔纹（用户指定：摩尔纹作为默认壁纸）。 */
 		const MODES = {
 			0: { name: "关", kind: null },
 			1: { name: "纸", kind: "paper" },
 			2: { name: "摩尔纹", kind: "moire" },
 			3: { name: "焦散", kind: "caustics" },
 		};
-		const DEFAULT_MODE = 1;
+		const DEFAULT_MODE = 2;
 		const KEY = "dsh-wallpaper-mode";
 
 		/**
@@ -202,8 +202,12 @@ window.__ModuleLoader__.load({
 		const TUNE = {
 			// 纸：光带核心在草稿里到 ~200，压完到 ~78；暗场几乎不动（≈UI_BASE）
 			paper: { pivot: 40, contrast: 0.80, vis: 0.34 },
-			// 摩尔纹：细线本来就低对比，再收一档会「糊成一片」，所以 vis 更低、pivot 更低
-			moire: { pivot: 30, contrast: 0.85, vis: 0.28 },
+			// 摩尔纹：细线本来就低对比，再收一档会「糊成一片」，所以 vis 更低、pivot 更低。
+			// 2026-09-25 用户要求「更亮一点」：vis 0.28 → 0.38，只动亮度这一项
+			// （pivot / contrast 不变 ⇒ 明暗结构、环线宽度、环线墨量都没动）。
+			// 代价是最亮处正文对比度 9.12:1 → 7.41:1，仍高于第 4.3 节定的 5.6:1 目标；
+			// 再往上就破线：0.48 → 6.28:1、0.60 → 4.93:1。回退：改回 0.28。
+			moire: { pivot: 30, contrast: 0.85, vis: 0.38 },
 			// 焦散：**方向和另外两档相反**。它天生是「大面积极暗 + 少数地方亮着细丝」，
 			// 本来就已经安静了 —— 再收对比就等于把丝压没（上一轮就是这么失败的）。
 			// 所以 contrast 拉到 0.95（几乎不动丝的峰值），pivot 压到 16（= 草稿暗场的灰度，
@@ -1397,9 +1401,15 @@ window.__ModuleLoader__.load({
 				lineHalf: 0.6, // 细环线半宽（CSS px）→ 全宽 ~1.2 设备像素
 				/* ★ 线的「墨量」。CPU 版是 1 内部 px 的线被 CSS 放大 4.5× —— 视觉上等价于
 				   「4.5px 宽、峰值 α≈0.07 的很淡的线」。这里线是原生的 1.2 设备像素，
-				   所以峰值 α 必须**大幅压低**（0.31 × 0.30 ≈ 0.09），而不是补偿性抬高；
-				   抬高的那版会编成「菱形纱窗网」，就是用户说的不好看。 */
-				gain: 0.3,
+				   所以峰值 α 不按宽度做补偿性抬高：抬到 0.95 时细线开始出现
+				   「菱形纱窗网」的串珠感，那是上界。
+				   2026-09-25 由 0.30 → 0.55（用户要求「摩尔纹明显加重」）：只加环线墨量，
+				   背景色染 / 暗角 / 大尺度明暗场一个参数都没动 —— 实测暗场 p50 灰阶
+				   前后都是 0.0139，变的只有环线峰值的亮尾（p999 0.0249 → 0.0276）。
+				   0.40 / 0.55 / 0.75 三档的实测量与局部放大图见
+				   _warmtheme_shots/wallpaper-preview/moire-gain-scan/。
+				   回退：把下面这个数改回 0.3。 */
+				gain: 0.55,
 			},
 			caustics: {
 				refW: 700, // 草稿基准宽度

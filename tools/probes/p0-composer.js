@@ -7,7 +7,14 @@
  *   columnVar   --dsh-conversation-column-width 的实际值
  *   widthPref   localStorage 里的偏好原文
  * 公式：content = min(max(pref, 640), max(640, column - 176))；card ≤ content + 32。
- */
+ 
+ *
+ * 为什么这里的代码是内联的：本文件**不是模块**，而是交给 tools/harness.mjs 的一段
+ * **函数体** —— harness 把它包成 `return (async () => { … })()` 用 Marionette 送进
+ * 真页面执行，所以它没有 import / require，也没有 node 的 fs / path。取值、常量、
+ * 判据只能就地写在这个文件里；凡是"数字与可见性"这类该由一处定义的期望值，一律
+ * 走契约（harness 注入为 window.__warmContract），本文件不手抄第二份。
+*/
 const KEY = "dsh.conversation.contentWidth";
 const card = document.querySelector('[data-slot="conversation.composer.bar"] [class*="_card"]');
 

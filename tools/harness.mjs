@@ -8,7 +8,7 @@
 // WebGL 是死的；Marionette 是 geckodriver 的原生协议，能 ExecuteScript ——
 // 于是可以在真 Firefox 里读 computedStyle、读画布像素、调 __dshWallpaper 钩子。
 //
-// 用法（Windows 路径，node.exe）：
+// 用法（Windows 路径，node.exe）：下面的 2828 是**注释示例**，不是代码里的默认值 ——
 //   node.exe tools\harness.mjs eval <probe.js>  [--port 2828] [--url U] [--width W] [--height H]
 //   node.exe tools\harness.mjs shot <out.png>   [--port 2828] [--url U] [--wait 1200]
 //   node.exe tools\harness.mjs both <out.png> <probe.js> [...]
@@ -17,11 +17,33 @@
 // window.__dshWallpaper 出现（最多 6 秒），所以不用自己 sleep。
 // 契约（contract/ui-contract.json）会先注入到页面的 window.__warmContract ——
 // 探针据此断言，于是"改设计"只需要改契约，不用改探针。
+//
+// 真正的默认端口取自契约 `probes.ffPort`（见下面的 FF_PORT），所以端口只有
+// 一个定义处，本文件里不再写一遍。
 
 import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+
+/** 契约：改设计只改 contract/ui-contract.json。读不到就返回 null（探针据此跳过）。 */
+function readContract() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(here, '..', 'contract', 'ui-contract.json'), 'utf8'));
+  } catch (error) {
+    return null;
+  }
+}
+const CONTRACT = readContract();
+
+/*
+ * Marionette 端口的默认值来自契约 `probes.ffPort`；`--port` 显式传参仍优先，
+ * 环境变量 DSH_FF_PORT 由 check.mjs 转成 `--port` 后同样优先。
+ * 契约读不到时退回一个字面量兜底 —— 兜底值只在一处（这里），且与契约同值。
+ */
+const FF_PORT = (CONTRACT && CONTRACT.probes && CONTRACT.probes.ffPort) || 2828;
 
 const argv = process.argv.slice(2);
 const mode = argv[0];
@@ -29,7 +51,7 @@ function flag(name, dflt) {
   const i = argv.indexOf('--' + name);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 }
-const PORT = Number(flag('port', '2828'));
+const PORT = Number(flag('port', String(FF_PORT)));
 const WAIT = Number(flag('wait', '1500'));
 const positional = argv.slice(1).filter((a, i, arr) => !a.startsWith('--') && !(i > 0 && arr[i - 1].startsWith('--')));
 const URL_ = flag('url', '');
@@ -119,13 +141,9 @@ const PRELUDE = `
 
 /** 契约：注进页面，让探针按数据断言（改设计只改 contract/ui-contract.json）。 */
 function contractLiteral() {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const file = path.join(here, '..', 'contract', 'ui-contract.json');
-  try {
-    return 'window.__warmContract = ' + JSON.stringify(JSON.parse(fs.readFileSync(file, 'utf8'))) + ';\n';
-  } catch (error) {
-    return 'window.__warmContract = null;\n';
-  }
+  return CONTRACT
+    ? 'window.__warmContract = ' + JSON.stringify(CONTRACT) + ';\n'
+    : 'window.__warmContract = null;\n';
 }
 
 async function main() {

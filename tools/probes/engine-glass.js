@@ -16,7 +16,14 @@
  * 读法（截图后逐行做互相关 / 测高频）：
  *   某格相对同行 control 有 ~12px 相位移动 = 这条路 + 这个配方在这台引擎上**有效**。
  *   全为 0 = 这条路完全没生效；只有 feimage 为 0 = 引擎不吃 feImage 的图源。
- */
+ 
+ *
+ * 为什么这里的代码是内联的：本文件**不是模块**，而是交给 tools/harness.mjs 的一段
+ * **函数体** —— harness 把它包成 `return (async () => { … })()` 用 Marionette 送进
+ * 真页面执行，所以它没有 import / require，也没有 node 的 fs / path。取值、常量、
+ * 判据只能就地写在这个文件里；凡是"数字与可见性"这类该由一处定义的期望值，一律
+ * 走契约（harness 注入为 window.__warmContract），本文件不手抄第二份。
+*/
 const TAG = "data-wta-engine-probe";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const XLINK_NS = "http://www.w3.org/1999/xlink";

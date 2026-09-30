@@ -1,0 +1,20 @@
+# 回退点/临时快照：仓库里累积的 .snapshots/<时间戳>-<说明>/ 是本地回退用的，
+# 不进版本库（clone 后也不需要）。条目与 .git/info/exclude 一致 —— 后者是**本地**
+# 排除，只在当前这台机器的这个 clone 生效；写进 .gitignore 才能让 clone 的人也得到
+# 同样的干净工作区。
+.snapshots/
+
+# 工具跑出来的临时文件（探针抓图、调试中间产物）。
+tools/_tmp-*
+*.tmp
+
+# 编辑器 / 系统杂项。
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# node_modules：本仓库的设计是**零依赖、零构建**（源码即产物，见 README
+# 「为什么没有构建步骤」）。这里留一条是为了防止将来有人误装依赖后把
+# node_modules 提交进来。
+node_modules/

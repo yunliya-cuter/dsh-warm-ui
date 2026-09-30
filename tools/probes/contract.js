@@ -3,7 +3,14 @@
  *
  * 设计意图：**数字与可见性写进契约，探针只负责量**。改设计 = 改契约；
  * 探针不该再出现一个手抄的期望值（那正是"每次都要重新认一遍 UI"的来源）。
- */
+ 
+ *
+ * 为什么这里的代码是内联的：本文件**不是模块**，而是交给 tools/harness.mjs 的一段
+ * **函数体** —— harness 把它包成 `return (async () => { … })()` 用 Marionette 送进
+ * 真页面执行，所以它没有 import / require，也没有 node 的 fs / path。取值、常量、
+ * 判据只能就地写在这个文件里；凡是"数字与可见性"这类该由一处定义的期望值，一律
+ * 走契约（harness 注入为 window.__warmContract），本文件不手抄第二份。
+*/
 const C = window.__warmContract;
 if (!C) return { violations: ["契约没注入（harness 读不到 contract/ui-contract.json）"], measured: {} };
 
@@ -405,6 +412,89 @@ if (listFadeSpec.state === "enforced") {
   }
 }
 
+/* ── ⑮ 卡片包含块：固定定位后代不许被卡片挤到视口外 ───────────────────────
+ *
+ * 用户 2026-09-27 报「右下角箭头/停止按钮亮起时悬停其上，画面反复切换」。根因是
+ * 模糊写在了卡片自己身上：带 backdrop-filter ≠ none 的元素会成为**固定定位后代的
+ * 包含块**，而 DSH 的 Tooltip 气泡（.bubble）正是 position:fixed、却渲染在卡片内部
+ * ⇒ 气泡的视口 left/top 被按卡片坐标系解释 ⇒ 落到视口外 ⇒ 撑出溢出 ⇒ 卡片位移
+ * ⇒ 指针被甩出按钮 ⇒ 气泡撤销 ⇒ 回弹 ⇒ 自激。
+ *
+ * 这一项在真机里断言**机制**（与视口高度无关，只看属性对不对）：
+ *   ① 契约登记的 layerTargets 有对应槽位时，卡片自己**不带** backdrop-filter，
+ *      而是 `isolation:isolate`；
+ *   ② 存在模糊层（[data-wta-glass-layer]），它承载着 backdrop-filter，且是卡片的
+ *      **兄弟**（parentElement 相同）并排在卡片**之前**；
+ *   ③ **不出现在视口外的 tooltip**：卡片内的 fixed 后代若被包含块错位，它的 rect
+ *      会落到视口外 —— 这条正是用户看到抽搐时同时存在的那个更严重的 bug。
+ *      只在 tooltip 存在时断言（它按需出现，不该为它造一个）。
+ *   ④ 层的几何与卡片对齐（差 ≤ 1px）：层是模糊的载体，错位就会露出没糊的边。
+ */
+const cbSpec = ((C.glass || {}).containingBlock) || {};
+let containingBlockProbe = null;
+if (cbSpec.state === "enforced" && card) {
+  containingBlockProbe = {};
+  const wantLayer = (cbSpec.layerTargets || []).some((sel) => {
+    try { return card.matches(sel); } catch { return false; }
+  });
+  containingBlockProbe.isLayerTarget = wantLayer;
+  const cs = getComputedStyle(card);
+  containingBlockProbe.card = { backdropFilter: cs.backdropFilter, isolation: cs.isolation };
+  if (wantLayer) {
+    if (cs.backdropFilter !== "none") {
+      violations.push("composer 卡片自己带着 backdrop-filter（" + cs.backdropFilter
+        + "）—— 它会成为固定定位后代的包含块，把 Tooltip 气泡挤到视口外并撑出溢出（契约 glass.containingBlock）");
+    }
+    if (cs.isolation !== "isolate") {
+      violations.push("composer 卡片没有 isolation:isolate（实测 " + cs.isolation
+        + "）—— 模糊移到兄弟层后，卡片的层叠上下文要靠它保住，[data-wta-surf] 的 z-index:-1 + mix-blend-mode:screen 依赖它");
+    }
+    const layer = document.querySelector("[data-wta-glass-layer]");
+    containingBlockProbe.layer = layer ? {
+      parentSame: layer.parentElement === card.parentElement,
+      beforeCard: (layer.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING) > 0,
+      backdropFilter: getComputedStyle(layer).backdropFilter,
+      rect: (() => { const r = layer.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]; })(),
+      cardRect: (() => { const r = card.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]; })(),
+    } : null;
+    if (!layer) {
+      violations.push("找不到模糊层 [data-wta-glass-layer] —— 契约 glass.containingBlock 要求模糊外置到卡片的兄弟层");
+    } else {
+      if (getComputedStyle(layer).backdropFilter === "none") {
+        violations.push("模糊层上没有任何 backdrop-filter —— 模糊既不在卡片上、也不在层上，玻璃等于失效");
+      }
+      if (layer.parentElement !== card.parentElement) {
+        violations.push("模糊层不是卡片的兄弟（parentElement 不同）—— 放进卡片内部等于让卡片再次成为 fixed 后代的包含块");
+      }
+      if (!((layer.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING) > 0)) {
+        violations.push("模糊层没有排在卡片**之前**（DOM 在后 = 画在上层）—— 层会盖住卡片内容");
+      }
+      const a = layer.getBoundingClientRect();
+      const b = card.getBoundingClientRect();
+      if (Math.abs(a.x - b.x) > 1 || Math.abs(a.y - b.y) > 1
+        || Math.abs(a.width - b.width) > 1 || Math.abs(a.height - b.height) > 1) {
+        violations.push("模糊层与卡片没对齐（层 " + JSON.stringify([Math.round(a.x), Math.round(a.y), Math.round(a.width), Math.round(a.height)])
+          + " vs 卡片 " + JSON.stringify([Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)]) + "）—— 错位会露出没糊的边");
+      }
+    }
+  }
+  /* ③ 视口外的 tooltip：这是「包含块错位」的直接症状，也是抽搐链的第一环。
+     只在它真出现时判 —— 气泡是按需渲染的，没有它不代表没问题,所以记 measured 不报违规。 */
+  containingBlockProbe.viewport = window.innerWidth + "x" + window.innerHeight;
+  containingBlockProbe.outsideTooltips = [...document.querySelectorAll('[role="tooltip"]')]
+    .filter((tip) => {
+      const r = tip.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return false;
+      return r.left < 0 || r.top < 0 || r.right > window.innerWidth || r.bottom > window.innerHeight;
+    })
+    .map((tip) => { const r = tip.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y)]; });
+  if (containingBlockProbe.outsideTooltips.length) {
+    violations.push("有 " + containingBlockProbe.outsideTooltips.length + " 个 tooltip 落在视口外（"
+      + JSON.stringify(containingBlockProbe.outsideTooltips) + "，视口 " + containingBlockProbe.viewport
+      + "）—— 卡片又成了固定定位后代的包含块（契约 glass.containingBlock）");
+  }
+}
+
 return {
   measured: {
     state,
@@ -427,6 +517,7 @@ return {
     glassHover: hoverProbe,
     busyIndicator: busyProbe,
     listEdgeFade: listEdgeProbe,
+    containingBlock: containingBlockProbe,
     viewport: window.innerWidth + "x" + window.innerHeight,
   },
   violations,

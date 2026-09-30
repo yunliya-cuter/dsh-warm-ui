@@ -27,7 +27,14 @@
  * 为什么用"注入同源 script"而不是 eval 源码来造世代：CSP 可能禁掉 `unsafe-eval`，
  * 而外链脚本走的是页面自己的 loader 通道；这里只是把 `load` 临时换成"捕获不注册"，
  * 拿到注册记录后立刻还原 —— 页面自己的模块图谱一点不动。
- */
+ 
+ *
+ * 为什么这里的代码是内联的：本文件**不是模块**，而是交给 tools/harness.mjs 的一段
+ * **函数体** —— harness 把它包成 `return (async () => { … })()` 用 Marionette 送进
+ * 真页面执行，所以它没有 import / require，也没有 node 的 fs / path。取值、常量、
+ * 判据只能就地写在这个文件里；凡是"数字与可见性"这类该由一处定义的期望值，一律
+ * 走契约（harness 注入为 window.__warmContract），本文件不手抄第二份。
+*/
 const MOVES = 120;
 const SETTLE_MS = 1200;
 

@@ -12,17 +12,21 @@
 用法：python3 apply-preview-settings.py <settings.yaml> [--keep-session-header ID]
 幂等：重复执行只会把这几项写成同样的值（已存在的 x-opencode-session 会被保留）。
 """
+import os
 import secrets
 import sys
 
 import yaml
 
 DEEPSEEK_MODELS = ["deepseek-v4-flash-vision-exp", "deepseek-v4-flash", "deepseek-v4-pro"]
-PREVIEW_HOME = "/mnt/d/projects/.dsh-warm-preview"
 
 
 def main() -> int:
     path = sys.argv[1]
+    # 审计日志要落在**预览 home 内**（避免写进真实 ~/.dsh）。这个 home 不必再写死一份
+    # 常量：调用方传进来的就是这个 home 里的 settings.yaml，取它的目录即得 ——
+    # 零新增配置读取逻辑，且 PREVIEW_HOME 换个位置时这里自动跟随。
+    preview_home = os.path.dirname(os.path.abspath(path))
     doc = yaml.safe_load(open(path, encoding="utf-8")) or {}
 
     providers = (doc.get("llm-pi-ai") or {}).get("providers") or {}
@@ -48,7 +52,7 @@ def main() -> int:
 
     guard = doc.get("dsh-auto-review")
     if isinstance(guard, dict) and isinstance(guard.get("audit"), dict):
-        guard["audit"]["path"] = f"{PREVIEW_HOME}/auto-review-audit.jsonl"
+        guard["audit"]["path"] = f"{preview_home}/auto-review-audit.jsonl"
 
     with open(path, "w", encoding="utf-8") as handle:
         yaml.safe_dump(doc, handle, allow_unicode=True, sort_keys=False, width=1000)

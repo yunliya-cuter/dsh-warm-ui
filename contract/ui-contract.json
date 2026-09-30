@@ -144,8 +144,42 @@
   },
   "glass": {
     "meaning": "液态玻璃：折射 + 边缘光 + 表面反射。**不做动效** —— 玻璃上没有任何随时间变化的位移",
+    "floatingSurfaces": {
+      "state": "enforced",
+      "meaning": "goal、任务面板和消息气泡使用同一套静态厚玻璃语言，但按信息层级分为面板密度与消息密度；不改变盒模型或交互",
+      "targets": [
+        { "sel": "[data-goal-bar] [class*=\"_bar\"]", "variant": "panel" },
+        { "sel": "[data-queue-dock] [class*=\"_panel\"]", "variant": "panel" },
+        { "sel": "[data-slot=\"conversation.input.dock\"] [class*=\"_root\"]", "variant": "panel" },
+        { "sel": "[data-trigger-menu]", "variant": "menu" },
+        { "sel": "[class*=\"_bubble\"]", "variant": "bubble" }
+      ],
+      "motion": "none",
+      "layoutInvariant": "保持原生尺寸、padding、圆角、文字换行和按钮命中区域",
+      "fallback": "不支持 backdrop-filter 时仍保留暖色透明底、静态阴影与表面层次"
+    },
+    "commandMenu": {
+      "state": "measured",
+      "sel": "[data-trigger-menu]",
+      "meaning": "命令模式（/）菜单的厚玻璃。**它不能用 goal 那套 blur 拿到观感**：菜单渲染在 composer 卡片内部（conversation.input.overlay），而卡片自己有 backdrop-filter、因而成为 backdrop root，卡片内部没有可采样的页面内容 —— 菜单自己的 backdrop-filter 贡献恒为 0。所以同观感只能靠**把底色做厚**得到：goal 靠 blur，这里靠不透明度。",
+      "whyNotBlur": "四组对照实测（grad = 透过浮层看到的背景条纹对比度，越低越糊；裸条纹 32.1）：① 把 goal 的原配方逐属性复制成一个悬浮块放在 conversation.input.dock（= goal 真实位置，卡片外）→ grad 0（完美）；② 同一块放在 composer 卡片内（= 菜单真实位置）→ grad 15.7（blur 失效）；③ 再把祖先链上所有能形成 backdrop root 的属性（isolation/backdrop-filter/filter/transform/will-change/contain/mix-blend-mode/perspective/clip-path/mask/container-type/opacity…共 18 类）全部中和 → grad 仍 26.3；④ 把菜单 material 底色 alpha 归零、只留 blur(40px) → grad 32.8，等于裸条纹。即 blur 的贡献恒为 0，不是被某个属性挡住的。",
+      "fillWhy": ".45（原生）→ grad 18.17；.70 → 10.90；.94 → 4.05。且 .45 的实测值恰好等于条纹对比度按 (1−alpha) 线性衰减的预测，进一步证明可读性只由不透明度决定。",
+      "materialLayer": "停用（background:none / backdrop-filter:none）—— 既然采不到背景，留着只会让底色叠成两层（.94 之上再叠 .45）",
+      "layoutInvariant": "圆角仍是 DSH 的 --dsw-radius-lg(16px)、尺寸/内边距/命中区域一字不动；只覆盖 background/border/box-shadow",
+      "legibility": {
+        "metric": "逐行 WCAG 对比度：只在有字形的行上量「字形峰值 vs 该行背景中位数」，取所有文字行的中位数（AA 门槛 4.5）",
+        "measured": "把菜单背后铺成纯色后扫描三档背景 —— 原生 vs 修复后：纯黑 7.42 → 7.95；中灰 3.24 → 7.22；纯白 1.56 → 6.57。原生在浅色背景上塌到 1.56（文字几乎不可见，正是用户报的现象），修复后三档全部达到 AA。"
+      },
+      "designNumbers": [
+        { "name": "--wta-slash-fill", "needle": "--wta-slash-fill: rgba(43, 40, 37, .94);", "value": "rgba(43, 40, 37, .94)" },
+        { "name": "--wta-slash-edge", "needle": "--wta-slash-edge: rgba(255, 255, 255, .18);", "value": "rgba(255, 255, 255, .18)" },
+        { "name": "--wta-slash-shadow", "needle": "--wta-slash-shadow: 0 1px 1px rgba(255, 255, 255, .10) inset, 0 -1px 0 rgba(0, 0, 0, .22) inset, 0 18px 40px -22px rgba(0, 0, 0, .82);", "value": "0 1px 1px rgba(255,255,255,.10) inset, 0 -1px 0 rgba(0,0,0,.22) inset, 0 18px 40px -22px rgba(0,0,0,.82)" }
+      ],
+      "legibilityFloor": 0.9,
+      "legibilityFloorWhy": "底色不透明度低于 .90 时，实心浅色背景上的文字对比度会掉到 AA 以下（.94 实测 6.57；这是「不许重新变回看不清」的地板）"
+    },
     "targets": [
-      { "sel": "[data-slot=\"conversation.composer.bar\"] [class*=\"_card\"]", "variant": "composer" },
+      { "sel": "[data-slot=\"conversation.composer.bar\"] [class*=\"_card\"]", "variant": "composer", "layer": true },
       { "sel": "[data-slot=\"conversation.input.dock\"] [class*=\"_root\"]", "variant": "" }
     ],
     "pointer": {
@@ -184,6 +218,51 @@
       },
       "measured": "无头 Chromium + 真鼠标真键盘。① 真假离开的判据（事件自带坐标）：真离开·跳跃式 pointerleave(1011,1200)、真离开·扫掠式 pointerleave(1011,854)（距最后一次 pointermove 仅 51ms），而视口内高只有 830 ⇒ 真离开的坐标落在视口外；假离开（指针没动 / 被别的窗口盖住）坐标仍在视口内。② 同一驱动改前改后：真离开·跳跃 / 扫掠都是 over=0 / .30 / blur(0)（真离开行为没变），假离开改前 over=0 / .30、改后 over=1 / .62 / blur(4px)，随后打字同样 over=1。③ 用户自己浏览器里的现场：over 翻 false 那一刻 focus=true、按最后指针坐标命中测试仍在卡片内、glass.alive=true —— 排除失焦与自我卸载两条路径，只剩「状态交给了最后到达的那条事件」。④ 相邻状态 13 拍全对：真离开仍回常态（.30 / blur 0，含「失焦 + 真离开」叠加时真离开赢）、假离开保持悬停、指针移到卡片外回常态 / 移回恢复、输入法 composition 与提交不改判定、卡片节点被整体替换后仍判定悬停。"
     },
+    "containingBlock": {
+        "state": "enforced",
+        "meaning": "带 backdrop-filter ≠ none 的元素会成为**固定定位后代的包含块**（CSS 规范）。DSH 的 Tooltip 气泡 `.bubble` 正是 position:fixed，却渲染在输入卡片**内部**的 `.uV2eYG_trailing` 里 —— 卡片一旦自己带 backdrop-filter，气泡的视口 left/top 就被按卡片坐标系解释，落到视口外。所以**模糊不许写在卡片自己身上**：它交给卡片外面、没有后代的兄弟层，卡片只留 isolation:isolate。",
+        "whySibling": "isolation:isolate 不在「造成包含块」的属性表里，也**不截断 backdrop 采样** —— 它只保住卡片的层叠上下文，让 `[data-wta-surf]` 的 z-index:-1 + mix-blend-mode:screen 仍然成立。层是卡片的**兄弟**（插在卡片之前），所以它自己不是任何 fixed 后代的祖先；它是空元素，没有后代可被错位。",
+        "rootCause": "dress() 原先把 backdrop-filter 内联写在 composer 卡片上，且每次 sync 重写 ⇒ 卡片成为 fixed 后代的包含块 ⇒ 气泡错位 ⇒ 见 symptom 链。",
+        "symptom": [
+          "① composer 里**所有** tooltip 都不可见（实测：`add` 的气泡 [945,831]、`primary` 的 [1793,824]，而视口只有 1578×802）—— 这一条比抽搐更严重，且与视口无关。",
+          "② 错位气泡撑出卡片的可滚动溢出（scrollWidth 863→1365）⇒ 某些视口高度下冒出横向滚动条 ⇒ DSH 的 ResizeObserver 把 --dsh-conversation-viewport-height 由 762 写成 757 ⇒ 卡片上移 2px。",
+          "③ 指针停在按钮下边缘时，这 2px 位移把指针甩出按钮 ⇒ mouseleave ⇒ 气泡撤销 ⇒ 布局回弹 ⇒ 指针又落回按钮 ⇒ 500ms 后气泡重现 ⇒ 自激。"
+        ],
+        "trigger": "右下角箭头/停止按钮处于亮起（可用）状态时悬停其上。按钮 disabled 时 Tooltip 直接短路（不 show），所以**必须先输入文字**让按钮变可用 —— 这正是用户说的「输入文字后会」。",
+        "measured": {
+          "oscillation": "无头 Chromium + 真鼠标事件（3082 测试实例，视口 1578×802）。修复前：卡片 Y 在 394↔392 之间翻转 **17 次 / 4.8s**，周期 ≈267ms（与 Tooltip 的 delayMs:500 同源）。修复后：卡片 Y 恒定 394，三次悬停（指针停底边上 1/2/3px）**全部 0 次自激翻转**（仅剩初始那一次状态切换）。",
+          "tooltip": "修复前 add=[945,831] v=false、primary=[1793,824] v=false；修复后 add=[451,437] v=true、primary=[1299,432] v=true，offsetParent 均为 (null)（= 真正相对视口定位）。",
+          "pixel": "**真实代码路径** A/B（只切 GLASS_TARGETS 的 layer 标记；两次截图几何完全一致 x=494.14 y=394 w=862.72 h=114）。真实壁纸下：mean 36.32→36.37、grad 3.295→3.311、逐像素差异 0.01%（max 33）。高频条纹背景（对模糊差异最敏感）下：mean 104.44→104.44、grad 25.341→25.341、差异 0.012%（max 31）、平均绝对通道差 0.002/255。",
+          "containment": "往卡片里插一个干净无关的 position:fixed 探针，它的 offsetParent 也是 uV2eYG_card（与 tooltip 无关，证明是卡片自身属性造成的，而不是气泡自己的样式）。删掉气泡节点后 5s 内 0 次翻转。"
+        },
+        "rejected": [
+          {
+            "what": "模糊移到子层 [data-wta-surf]",
+            "why": "该层带 mix-blend-mode:screen，需要卡片提供混合参照；模糊搬走等于把参照也搬走 ⇒ 实心亮面。实测亮带 mean 102.57→184、grad 24.5→0.0。"
+          },
+          {
+            "what": "模糊移到卡片 ::before",
+            "why": "卡片上的 isolation:isolate 使卡片成为 **backdrop root**，伪元素只能采到卡片自己的底色、采不到页面背景 ⇒ 模糊失效变亮块。实测 grad 24.94→0.24、差异 41.33%。tooltip 这条能修好，但视觉不可接受。"
+          },
+          {
+            "what": "卡片加 z-index:0 而不动模糊",
+            "why": "z-index 不能把卡片从「包含块」里摘出去，fixed 后代照旧错位；子层版本实测 mean 102.57→187.14。"
+          }
+        ],
+        "must": [
+          "const LAYER_ATTR = \"data-wta-glass-layer\";",
+          "const ensureLayer = (el) => {",
+          "const placeLayer = (el, rect, radius) => {",
+          "el.style.setProperty(\"backdrop-filter\", \"none\", \"important\");",
+          "el.style.setProperty(\"isolation\", \"isolate\", \"important\");"
+        ],
+        "forbidden": [
+          "el.style.setProperty(\"backdrop-filter\", value, \"important\")"
+        ],
+        "layerTargets": [
+          "[data-slot=\"conversation.composer.bar\"] [class*=\"_card\"]"
+        ]
+      },
     "motion": {
       "state": "none",
       "meaning": "原来这里有一层「流动层」：叠一条随时间变化的低频噪声位移（GLASS_WARP 配方 + 定时器驱动 baseFrequency/scale），叠在折射之上。2026-09-24 按用户要求整层删除（原话：「消除输入框边缘波纹动效」「不要用另一套动效替代」）。删的是实现，不是显示：滤镜图里不再有 feTurbulence/驱动属性，body 上不再有 data-wta-glasswarp，EXTRA_DEFAULTS 里不再有 glassWarp。",
@@ -350,5 +429,14 @@
       "height": 830,
       "dpr": 1.2
     }
+  },
+  "probes": {
+    "ffPort": 2828,
+    "ffPortEnv": "DSH_FF_PORT",
+    "ffPortMeaning": "真机断言的 Marionette 端口。tools/harness.mjs 与 tools/check.mjs 的 browserEnv 都从这一处取默认值；环境变量 DSH_FF_PORT 仍然优先（覆盖它即可换端口，不需要改文件）。此前这个默认值在两个文件里各写了一遍 2828。",
+    "ffPortUsedBy": [
+      "tools/harness.mjs",
+      "tools/check.mjs"
+    ]
   }
 }

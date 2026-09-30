@@ -1,0 +1,19 @@
+# dsh-warm-shared bundle 层：把自己插进组合树。
+#
+# 本包是**纯浏览器侧的工具包**（宿主半边是空插件，见 lib/index.js 的说明），
+# 但仍然必须是一条 loader entry —— `dsh-client-modules` 是按 loader entry 扫描
+# `dsh.client` 声明的，没有 entry 就不会有 client 模块，消费方
+# （dsh-warm-ui / dsh-warm-wallpaper）的 `require("dsh-warm-shared")` 就会解析失败。
+#
+# 依赖方向是单向的：消费方 → 本包。模块图谱会按各消费方 package.json 的
+# `dsh.client.external` 把本包的 factory 排在它们之前（工厂式 CJS 的递归物化
+# 本身也保证顺序），所以本文件里的插入位置不敏感。
+#
+# 安装：本包与 dsh-warm-ui 同仓库，用 pnpm 的子目录语法一起装：
+#   dsh plugin add --profile web \
+#     'git+https://github.com/<owner>/dsh-warm-ui.git' \
+#     'git+https://github.com/<owner>/dsh-warm-ui.git#path:preview/shared'
+- insert:
+    - id: dsh-warm-shared
+      name: 'dsh-warm-shared'
+      config: {}
