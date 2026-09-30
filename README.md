@@ -1,12 +1,73 @@
 # dsh-warm-ui
 
+> 一个 [DSH（DeepSeek Harness）](https://github.com/deepseek-ai) Web GUI 客户端插件包：
+> **暖色主题** + **液态玻璃材质** + **输入栏工具行整形**。
+
 给 DSH Web GUI 换一套**暖色调**，并把输入栏工具行里那簇第三方控件**压扁、对齐、去发光**。
 
 - 暖色：整站色阶从冷蓝灰换成暖褐灰，强调色从品牌蓝换成暖琥珀；明暗两套主题同时生效。
 - 整形：输入栏里 `prompt-optimizer` 的两个滑杆 + 档位胶囊 + 模型胶囊 + 帮助圆钮，改成 24px 高、
   无发光、无胶囊底色的一组安静控件，并在它与左侧 DSH 原生「访问模式」之间加一条发丝分隔线。
+- 玻璃：输入卡片/菜单的折射、边缘光、表面反射（Chromium 独有；Firefox 平台不支持 SVG 滤镜
+  作为 backdrop，那里只有 blur/tint。见 `contract/ui-contract.md` 第 6 节）。
 
-## 它改了什么（技术细节）
+## 环境要求
+
+| 项 | 要求 |
+| --- | --- |
+| DSH | `>=0.1.7-rc.2 <0.2.0`（实测于 `0.1.7-rc.2`） |
+| profile | `web`（本插件只在 Web GUI 里有意义） |
+| 浏览器 | Chromium 系（玻璃效果）；Firefox 可用但无折射层 |
+| 运行时依赖 | [`dsh-warm-shared`](#它依赖什么)，与主包同仓库、**必须一起装** |
+
+`peerDependencies` 里声明了两个宿主框架包作为**能力来源**（不是硬性安装要求，DSH 自带）：
+
+| peer | 用途 |
+| --- | --- |
+| `@deepseek-ai/dsh-client-ui-theme` | `ctx.theme.overrideTokens` —— 暖色 token 的写入通道 |
+| `@deepseek-ai/dsh-client-ui-slots` | `sidebar.footer.action` —— 左下角「外观」换档面板 |
+
+> 只有以 `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` 开头的 peer 会被 DSH 做版本校验
+> （见 `dsh-app-boot` 的 `evaluatePluginCompatibility`），所以上面这两条是**声明意图 + 让
+> 版本不匹配时 DSH 能提前告警**，不会挡住安装。
+
+## 它导出什么
+
+| 入口 | 文件 | 说明 |
+| --- | --- | --- |
+| `.` | `lib/index.js` | **host 半边**：空插件，只为了让 loader 有一条 entry（`dsh-client-modules` 按 loader entry 扫描 `dsh.client` 声明，没有它就不会有客户端模块） |
+| `./client` | `lib/client.js` | **浏览器半边**：全部实际行为都在这里 |
+| `./cordis.patch.yml` | `cordis.patch.yml` | 包自带的组合补丁层，声明本包自己的 loader entry |
+| `./package.json` | `package.json` | |
+
+`dsh.bundle.patch` 指向包内的 `cordis.patch.yml`，这是 DSH **标准插件包**的挂载方式
+（与 `@gbthui/dsh-auto-review`、`@dsh-external/dsh-prompt-optimizer` 同一写法）——
+装完由 DSH 自己把包名写进 profile 的 bundles，用户不需要手改配置。
+
+## 为什么没有构建步骤
+
+**源码就是产物。** 这个仓库**没有** `tsconfig` / rollup / vite / esbuild / tsup 任何构建配置，
+也不需要 —— DSH 的客户端 bundle 是**按请求逐字节读盘**的（实测：从 `lib/client.js` 取的原文
+片段在服务器返回的 bundle 里 100% 命中），格式本身就是平台要求的
+`window.__ModuleLoader__.load({ id, factory })` 工厂式 CJS。
+
+所以：**clone 下来即可用，不必 build**。改动 `lib/client.js` → 刷新浏览器即生效。
+
+## 它依赖什么
+
+`dsh-warm-shared`（同仓库 `preview/shared/`）是**必需的**运行时依赖，它只有 97 行、导出 2 个函数
+（`createStyleInstaller` / `cssPropertyName`），被收拢在这里的理由是**一个真实线上 bug**：
+样式表必须打上 `data-plugin` / `data-plugin-css` 标记，漏掉会导致热重载删不掉旧表，
+旧表把玻璃滤镜 svg 撑出 255px，用户看到的就是「壁纸跑到页面下面」。实现只有一份，
+消费方就不能各抄一遍。
+
+一条依赖要在**三处同时成立**（`node tools/check.mjs` 的「共享依赖」一条会核对）：
+
+1. 代码：工厂体里 `require("dsh-warm-shared")`；
+2. 清单：本包 `package.json` 的 `dsh.client.external`（宿主靠它把依赖行排在本包之前）；
+3. 契约：`contract/ui-contract.json` 的 `requires`。
+
+## 它还改了什么（技术细节）
 
 > 液态玻璃的折射与"流动层"（玻璃底下的内容持续轻微游动）写在
 > `contract/ui-contract.md` 第 6 节：数字、三道门、以及**为什么 Firefox 没有这一层**（实测）。
@@ -96,26 +157,60 @@ DSH 的侧栏底部有一个官方插槽 `sidebar.footer.action`，插件在那�
 
 ## 安装
 
+**两个包都装**（`dsh-warm-ui` 的客户端代码 `require("dsh-warm-shared")`，缺它整站起不来）：
+
 ```bash
-bash /mnt/d/projects/dsh-warm-ui/install.sh
+dsh plugin add --profile web \
+  'git+https://github.com/yunliya-cuter/dsh-warm-ui.git' \
+  'git+https://github.com/yunliya-cuter/dsh-warm-ui.git#path:preview/shared'
 ```
 
-脚本只做一件事：往 `~/.dsh/profiles/web/cordis.patch.yml` 追加一段 `insert` 条目
-（先备份原文件，幂等，可重复执行）。web profile 的 patch 文件是**实时监听**的，
-所以 dsh web 会在进程内重新装配，**不需要重启服务**；之后在浏览器按一次 **F5** 即可看到效果。
+第二条的 `#path:preview/shared` 是 pnpm 的**子目录语法**（本仓库是多包结构，共享包在子目录里）。
+从 fork 安装时把 `yunliya-cuter` 换成你自己的账号即可。
 
-> 条目里的 `name` 用的是绝对路径 `/mnt/d/projects/dsh-warm-ui/lib/index.js`——
-> 插件源码留在工作区里，profile 侧不留任何软链接或 node_modules 改动。
-> 如果以后挪动/删除这个目录，patch 里的这一条会加载失败（装配是事务性的，失败会回滚保留原树），
-> 删掉那一段即可。
+装完 **不用手改任何配置**：两个包各自声明了 `dsh.bundle.patch`，DSH 会在安装后自动把包名写进
+profile 的 `dsh.profile.bundles`（`dsh-app-boot` 的 `reconcileProfilePlugins`：「New bundle
+dependencies activate automatically」），并在进程内重新装配。浏览器按一次 **F5** 即可。
+
+> **为什么必须两条 spec**：`dsh-warm-shared` 是**必需的**运行时依赖，不是可选装饰。
+> 它在模块图谱里被 `require` 到，解析失败会让浏览器侧抛出
+> `web boot: N entries did not activate`，**整个宿主起不来**（页面只剩「Failed to load plugins」）。
+> pnpm 默认禁止子依赖走 git 协议（`ERR_PNPM_EXOTIC_SUBDEP`），所以无法让主包自动带出它 ——
+> 必须由安装命令同时指定。
+
+### 验证装好了
+
+打开页面后，左下角应出现 **「外观 · <当前档>」** 一行（本插件注册到 `sidebar.footer.action`）；
+整站强调色变成暖琥珀、输入卡片带玻璃质感即为生效。控制台可查：
+
+```js
+window.__dshWarmExtra.glass   // => { alive: true, generation: 1 }
+```
 
 ## 卸载
 
 ```bash
-bash /mnt/d/projects/dsh-warm-ui/uninstall.sh
+dsh plugin remove --profile web dsh-warm-ui dsh-warm-shared
 ```
 
-移除 patch 片段（先备份），刷新页面即回出厂配色。已验证「安装 → 卸载」后 patch 文件逐字节还原。
+bundles 与 `node_modules` 会被自动清理，刷新页面即回出厂配色。
+
+## 从本地工作区开发（改代码即时生效）
+
+不想走 git 安装、就在本仓库上改代码时，直接把**本地路径**作为 spec 装进来：
+
+```bash
+dsh plugin add --profile web \
+  "$(pwd)" \
+  "$(pwd)/preview/shared"
+```
+
+`dsh plugin add` 接受本地绝对路径（会做成 `link:` 依赖），改完 `lib/client.js`
+**刷新浏览器**即可生效（客户端 bundle 由 webserver 按请求读盘，不用重启服务）。
+
+> 注意：改了包的 `dsh.client` 清单（例如动 `external`）需要**重启** dsh 才会被重新读取 ——
+> 宿主把包元数据缓存在内存里，换 patch 不会让它重读 `package.json`。
+
 
 ## 想自己调
 
