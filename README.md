@@ -158,6 +158,11 @@ window.__dshWarmMotion.diagnostics()  // { mode, boxes, paintedRects, caret, nat
 window.__dshWarmMotion.set(0)         // 等价于点外观面板里的「关」
 ```
 
+**几个会被误认为"坏了"的正常行为**：窗口没有焦点时不画光标（浏览器在这种情况下也不显示
+光标，`paint()` 里直接判 `document.hasFocus()`）；宿主换掉输入框节点（切换会话、React 重渲染）
+时引擎会重新认领当前焦点，另外每秒对账一次，发现"焦点在可编辑区但没被接管"就补上；
+编辑器里选中了 chip（DSH 自己把原生光标藏起来）时不画。
+
 **降级**：prefers-reduced-motion: reduce 时引擎不接管（CSS 也把图层 display:none），
 两个方向都监听 change；任何一步抛错都会摘掉属性退回原生，不会出现"没有光标"的输入框。
 
