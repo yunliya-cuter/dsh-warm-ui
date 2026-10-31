@@ -40,13 +40,20 @@
           "marker": "data-dsh-warm-extra",
           "cssTemplate": "EXTRA_STYLESHEET",
           "cssVarPrefix": "--wta-"
+        },
+        {
+          "name": "motion",
+          "marker": "data-dsh-warm-motion",
+          "cssTemplate": "MOTION_STYLESHEET",
+          "cssVarPrefix": "--wta-"
         }
       ],
       "ownerKeys": [
         "glassSvg",
         "optimizerPop",
         "guardNote",
-        "collapseChip"
+        "collapseChip",
+        "motionLayer"
       ],
       "detachedOwnerKeys": [
         "glassSvg",
@@ -66,7 +73,11 @@
         "data-dsh-warm-guard-note",
         "data-wta-glass-svg",
         "data-dsh-warm-dpo",
-        "data-dsh-warm-bold"
+        "data-dsh-warm-bold",
+        "data-dsh-warm-motion",
+        "data-wta-motion-layer",
+        "data-wta-motion-caret",
+        "data-wta-motion-sel"
       ],
       "cssVarsFromJs": [
         "--wta-glass-tint-cur"

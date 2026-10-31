@@ -9,6 +9,9 @@
 - 暖色：整站色阶从冷蓝灰换成暖褐灰，强调色从品牌蓝换成暖琥珀；明暗两套主题同时生效。
 - 整形：输入栏里 `prompt-optimizer` 的两个滑杆 + 档位胶囊 + 模型胶囊 + 帮助圆钮，改成 24px 高、
   无发光、无胶囊底色的一组安静控件，并在它与左侧 DSH 原生「访问模式」之间加一条发丝分隔线。
+- 动效：输入框里是**弹簧光标**（打字常亮、停手 500ms 才闪、横移是滑过去而不是瞬移）+
+  框内与正文的**选区高亮**（位置/宽度弹簧驱动）；颜色从当前主题的强调色派生，浓度一个变量可调，
+  外观面板里有「动效 关/开」。尊重系统「减少动态效果」，关掉即完全回到浏览器原生。
 - 玻璃：输入卡片/菜单的折射、边缘光、表面反射（Chromium 独有；Firefox 平台不支持 SVG 滤镜
   作为 backdrop，那里只有 blur/tint。见 `contract/ui-contract.md` 第 6 节）。
 
@@ -107,7 +110,59 @@ DSH 的配色是两级变量：`--dsw-static-*`（色阶）→ `--dsw-alias-*`�
 万一插件的 DOM 结构变了、探测不到刻度按钮，插件会自动退回原样（滑杆回来、胶囊隐藏），
 不会留下一个点不动的空壳。
 
+### 3. 动效层：弹簧光标 + 选区高亮
+
+一张独立样式表（MOTION_STYLESHEET，标记 data-dsh-warm-motion）+ 一个独立引擎
+（createMotionApi），挂在 body[data-wta-motion] 下。关掉开关时引擎整个销毁：
+图层移除、两个属性摘掉，原生光标与原生选中色立刻回来。
+
+**做什么**
+
+| 场景 | 行为 |
+|---|---|
+| 光标 | 自绘 2px 竖条，横向位置由弹簧驱动（response 0.3s、临界阻尼不过冲）；打字期间常亮，停手 500ms 后按 1.06s 周期闪 |
+| 框内选区 | 位置与宽度弹簧（0.2s，拖选 0.1s）、透明度 0.12s 淡入；跨行时每行各自一块 |
+| 正文选区 | 同上，覆盖整页；被包住的嵌套矩形会去掉，上限 200 块 |
+
+范围是**全站所有可编辑区**：textarea、单行 input、[contenteditable]（DSH 的输入框是 Lexical
+contenteditable）。单行/多行输入框走「隐形镜面」量取（同字体同内边距的隐藏 div + Range 矩形），
+contenteditable 直接量 Selection。
+
+**为什么高亮不会把字染色**
+
+自绘层画在文字**上面**（不重排宿主 DOM），靠 mix-blend-mode 把它变成"垫在下面"的观感：
+亮色主题 multiply（白底压成暖米色，深字几乎不变）、暗色 screen（暗底提亮，亮字几乎不变）。
+3082 实测：选中前后文字色只差 +2~3 级，而原生蓝色选中会让文字 +20 级。
+
+**颜色从哪来**
+
+--wta-motion-sel-fill = color-mix(in srgb, var(--dsw-alias-state-business-primary)
+var(--wta-motion-sel-strength), transparent)。强调色由暖色 token 提供（暖琥珀），所以换暖度档位、
+换明暗主题都会自动跟随。浓度只有 --wta-motion-sel-strength 一个旋钮（默认 34%，是在真实暖色
+对话框上对比 18 / 26 / 34 / 42 四档定的）。
+
+**改这张表/这段代码前必须知道的两件事**（都踩过）
+
+1. 图层必须是 display: contents。position: fixed 的包裹层会被浏览器单独合成，内层
+   mix-blend-mode 的"背景"变成透明的自己 —— 高亮退化成一块盖住文字的不透明色块
+   （实测：整行只剩一个 RGB 值，字全被吃掉）。
+2. ::selection 的开关属性挂在 <html> 上，所以那条规则**不能**写成
+   body[...] [data-wta-motion-sel] ::selection —— <html> 不是 body 的后代，规则永远不匹配，
+   结果是自绘高亮和原生蓝叠成两层（3082 实测）。
+
+**自检口**
+
+```js
+window.__dshWarmMotion.get()          // { enabled, layer, engine }
+window.__dshWarmMotion.diagnostics()  // { mode, boxes, paintedRects, caret, nativeSel, error }
+window.__dshWarmMotion.set(0)         // 等价于点外观面板里的「关」
+```
+
+**降级**：prefers-reduced-motion: reduce 时引擎不接管（CSS 也把图层 display:none），
+两个方向都监听 change；任何一步抛错都会摘掉属性退回原生，不会出现"没有光标"的输入框。
+
 ## 定稿的默认值（2025-09-13 评审结果）
+
 
 配色是一轮轮在隔离预览里挑出来的，最终烧死成下面这几个默认值；每一档都能用
 `localStorage` 临时改（键名见表），不用重新构建：
