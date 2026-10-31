@@ -43,6 +43,22 @@ DOM，把结果写到 body 属性上：
 
 行高 24px 只在 `chip` 态断言（那是我们定的形态）。
 
+### 这是**可选适配**，不是依赖（2026-09-30 复核）
+
+上面三态要服务的第三方插件是 `@dsh-external/dsh-prompt-optimizer`。本包与它的关系：
+
+- **不 import、不 require、`package.json` 不声明** —— 没有安装期依赖，
+  唯一的耦合面是**运行期 DOM 约定**（`.dpo-controls` / `.dpo-slider` / `[data-dpo]`）。
+- 那些 `.dpo-*` 选择器是「只有插件在时才匹配」的样式；插件不在时**零匹配、无副作用**。
+- **核心功能完全不经过它**：暖色 token、玻璃材质、外观面板、列表渐隐、忙碌指示都不依赖它。
+  实测无插件的隔离实例：`bootFailed=false`、`slotError=0`、控制台 0 条异常。
+- **生命周期对齐**：本包为它准备的节点（`.wti-chip` / `.wti-pop` / `body[data-dsh-warm-dpo]`）
+  **只在 `.dpo-controls` 存在于文档中时**才存在。它不在时三者一律撤掉，
+  所以「装没装它」在 DOM 上不留下本包的痕迹。
+
+> 实测（真实移除 `.dpo-controls` 节点）：chip `1→0`、pop `1→0`、
+> `body[data-dsh-warm-dpo]` `"chip"→null`；放回后三者自动恢复，**无需刷新页面**。
+
 ### 工具行里只该有**一颗**「优化」胶囊（2026-09-24 用户报重复）
 
 清扫按**类名**（`.wti-chip`），不是只按归属标记 `data-dsh-warm-collapse`。
