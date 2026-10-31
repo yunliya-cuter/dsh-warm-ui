@@ -1,0 +1,9 @@
+# dsh-warm-wallpaper bundle 层：把自己插进组合树。
+#
+# 标准 DSH 插件包装法：包名被列进 profile 的 dsh.profile.bundles 时，DSH 读取本层
+# 并把下面这条 entry 插进根条目表。host 半边是空插件（全部行为在 lib/client.js），
+# 但仍然必须有 entry —— dsh-client-modules 按 loader entry 扫描 dsh.client 声明。
+- insert:
+    - id: dsh-warm-wallpaper
+      name: 'dsh-warm-wallpaper'
+      config: {}

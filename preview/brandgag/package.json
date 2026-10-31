@@ -1,8 +1,7 @@
 {
   "name": "dsh-warm-brandgag",
-  "version": "0.0.1",
-  "private": true,
-  "description": "品牌文字彩蛋：deepseek → deepsleep，HARNESS → 遛狗绳。3081 与 3082 都挂。",
+  "version": "0.2.0",
+  "description": "品牌文字彩蛋：deepseek → deepsleep，HARNESS → 遛狗绳",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -12,15 +11,24 @@
     "./client": {
       "default": "./lib/client.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
   },
   "files": [
-    "lib"
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
   ],
   "license": "MIT",
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web"
     }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.7-rc.2 <0.3.0"
   }
 }

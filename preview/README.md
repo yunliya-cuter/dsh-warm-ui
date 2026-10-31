@@ -12,7 +12,7 @@
 | profile | `~/.dsh/profiles/web` | `…/.dsh-warm-preview/profiles/web`（**副本**） |
 | 端口 | 3081 | **3082** |
 | 工作区 | `/mnt/d/projects` | `/mnt/d/projects`（按你的选择共用真实工作区） |
-| 额外插件 | 无 | `dsh-warm-ui`（暖色 + 输入栏整形） |
+| 额外插件 | 无 | `dsh-warm-ui` 单包（暖色 + 输入栏整形 + 壁纸 + 品牌彩蛋） |
 
 因为 home 不同，两边的**会话、存储、设置写入、插件装配**都互不影响；
 只有「工作区目录」是共用的（在预览里跑 agent 会真的改文件，这是你选的）。
@@ -20,7 +20,7 @@
 ## 脚本
 
 ```bash
-bash preview/setup-preview-home.sh   # 重建预览 home（复制真实 profile/settings/凭据/会话/预设，再插入 dsh-warm-ui）
+bash preview/setup-preview-home.sh   # 重建预览 home（复制真实 profile/settings/凭据/会话/预设，再插入 dsh-warm-ui 单包）
 bash preview/start-preview.sh        # 启动（已运行则先停），打印带 token 的地址
 bash preview/stop-preview.sh         # 停止（只杀 3082，不影响 3081）
 bash preview/toggle-warm-ui.sh off   # 预览实例切回出厂配色（真实 profile 不受影响）
@@ -28,8 +28,12 @@ bash preview/toggle-warm-ui.sh on    # 切回暖色
 bash preview/toggle-warm-ui.sh status
 ```
 
-`toggle` 只改预览 home 里的 patch 文件；web profile 的 patch 是**热监听**的，
-写完会在进程内重新装配，浏览器刷新一次即可看到切换效果 —— 用来做 A/B 对比。
+`toggle-warm-ui` 改的是预览 profile 的 `dsh.profile.bundles`（加入/移除 `dsh-warm-ui` 单包），
+改完需要 `preview/start-preview.sh` 重启预览才生效。
+
+> 2026-10-31 起 `dsh-warm-wallpaper` / `dsh-warm-brandgag` 已并入 `dsh-warm-ui` 单包，
+> 由主包的 `cordis.patch.yml` 自动挂载；`preview/toggle-wallpaper.sh`、`preview/toggle-brandgag.sh`
+> 只保留为迁移提示，不再单独改 patch（单独追加会造成重复 entry）。
 
 ## 预览实例里的模型配置
 

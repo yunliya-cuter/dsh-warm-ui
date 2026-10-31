@@ -1,9 +1,10 @@
 # dsh-warm-ui
 
 > 一个 [DSH（DeepSeek Harness）](https://github.com/deepseek-ai) Web GUI 客户端插件包：
-> **暖色主题** + **液态玻璃材质** + **输入栏工具行整形**。
+> **暖色主题** + **液态玻璃材质** + **输入栏工具行整形** + **动态壁纸** + **品牌彩蛋**。
 
 给 DSH Web GUI 换一套**暖色调**，并把输入栏工具行里那簇第三方控件**压扁、对齐、去发光**。
+这是一个**单包多插件**的 bundle：暖色系列的全部 4 个插件都随 `dsh-warm-ui` 一起发布、一起挂载。
 
 - 暖色：整站色阶从冷蓝灰换成暖褐灰，强调色从品牌蓝换成暖琥珀；明暗两套主题同时生效。
 - 整形：输入栏里 `prompt-optimizer` 的两个滑杆 + 档位胶囊 + 模型胶囊 + 帮助圆钮，改成 24px 高、
@@ -15,10 +16,10 @@
 
 | 项 | 要求 |
 | --- | --- |
-| DSH | `>=0.1.7-rc.2 <0.2.0`（实测于 `0.1.7-rc.2`） |
+| DSH | `>=0.1.7-rc.2 <0.3.0`（实测于 `0.1.7-rc.2` 与 `0.2.1-rc.3`） |
 | profile | `web`（本插件只在 Web GUI 里有意义） |
 | 浏览器 | Chromium 系（玻璃效果）；Firefox 可用但无折射层 |
-| 运行时依赖 | [`dsh-warm-shared`](#它依赖什么)，与主包同仓库、**必须一起装** |
+| 运行时依赖 | [`dsh-warm-shared`](#它依赖什么) 已作为子包随本包发布，**不需要单独安装** |
 
 `peerDependencies` 里声明了两个宿主框架包作为**能力来源**（不是硬性安装要求，DSH 自带）：
 
@@ -37,12 +38,17 @@
 | --- | --- | --- |
 | `.` | `lib/index.js` | **host 半边**：空插件，只为了让 loader 有一条 entry（`dsh-client-modules` 按 loader entry 扫描 `dsh.client` 声明，没有它就不会有客户端模块） |
 | `./client` | `lib/client.js` | **浏览器半边**：全部实际行为都在这里 |
-| `./cordis.patch.yml` | `cordis.patch.yml` | 包自带的组合补丁层，声明本包自己的 loader entry |
+| `./cordis.patch.yml` | `cordis.patch.yml` | 包自带的组合补丁层，声明暖色系列 4 个 loader entry |
 | `./package.json` | `package.json` | |
 
 `dsh.bundle.patch` 指向包内的 `cordis.patch.yml`，这是 DSH **标准插件包**的挂载方式
 （与 `@gbthui/dsh-auto-review`、`@dsh-external/dsh-prompt-optimizer` 同一写法）——
 装完由 DSH 自己把包名写进 profile 的 bundles，用户不需要手改配置。
+
+`dsh-warm-ui` 不只是主题本体：它是一个**单包多插件 bundle**。`package.json` 的 `files`
+同时发布 `preview/shared`（共享模块）、`preview/wallpaper`（动态壁纸）、
+`preview/brandgag`（品牌彩蛋）；`cordis.patch.yml` 用相对路径 entry 把这几个子包
+一起插进组合树。所以安装/卸载永远只面对一个包名：`dsh-warm-ui`。
 
 ## 为什么没有构建步骤
 
@@ -59,7 +65,8 @@
 （`createStyleInstaller` / `cssPropertyName`），被收拢在这里的理由是**一个真实线上 bug**：
 样式表必须打上 `data-plugin` / `data-plugin-css` 标记，漏掉会导致热重载删不掉旧表，
 旧表把玻璃滤镜 svg 撑出 255px，用户看到的就是「壁纸跑到页面下面」。实现只有一份，
-消费方就不能各抄一遍。
+消费方就不能各抄一遍。它现在作为 `dsh-warm-ui` 的包内子目录一起发布，不再要求用户
+额外安装一条 `#path:preview/shared` spec。
 
 一条依赖要在**三处同时成立**（`node tools/check.mjs` 的「共享依赖」一条会核对）：
 
@@ -157,56 +164,71 @@ DSH 的侧栏底部有一个官方插槽 `sidebar.footer.action`，插件在那�
 
 ## 安装
 
-**两个包都装**（`dsh-warm-ui` 的客户端代码 `require("dsh-warm-shared")`，缺它整站起不来）：
+**只装一个包**：
 
 ```bash
-dsh plugin add --profile web \
-  'git+https://github.com/yunliya-cuter/dsh-warm-ui.git' \
-  'git+https://github.com/yunliya-cuter/dsh-warm-ui.git#path:preview/shared'
+dsh plugin add --profile web 'git+https://github.com/yunliya-cuter/dsh-warm-ui.git'
 ```
 
-第二条的 `#path:preview/shared` 是 pnpm 的**子目录语法**（本仓库是多包结构，共享包在子目录里）。
-从 fork 安装时把 `yunliya-cuter` 换成你自己的账号即可。
+从 fork 安装时把 `yunliya-cuter` 换成你自己的账号即可。装完 **不用手改任何配置**：
+包自带 `dsh.bundle.patch`，DSH 会在安装后自动把 `dsh-warm-ui` 写进 profile 的
+`dsh.profile.bundles`（`dsh-app-boot` 的 `reconcileProfilePlugins`：
+「New bundle dependencies activate automatically」），并在进程内重新装配。浏览器按一次 **F5** 即可。
 
-装完 **不用手改任何配置**：两个包各自声明了 `dsh.bundle.patch`，DSH 会在安装后自动把包名写进
-profile 的 `dsh.profile.bundles`（`dsh-app-boot` 的 `reconcileProfilePlugins`：「New bundle
-dependencies activate automatically」），并在进程内重新装配。浏览器按一次 **F5** 即可。
+本包的 `cordis.patch.yml` 会一次插入 4 个 entry：
 
-> **为什么必须两条 spec**：`dsh-warm-shared` 是**必需的**运行时依赖，不是可选装饰。
-> 它在模块图谱里被 `require` 到，解析失败会让浏览器侧抛出
-> `web boot: N entries did not activate`，**整个宿主起不来**（页面只剩「Failed to load plugins」）。
-> pnpm 默认禁止子依赖走 git 协议（`ERR_PNPM_EXOTIC_SUBDEP`），所以无法让主包自动带出它 ——
-> 必须由安装命令同时指定。
+| entry id | 实际插件 |
+| --- | --- |
+| `dsh-warm-shared` | 共享样式表注入模块 |
+| `dsh-warm-ui` | 暖色主题 + 玻璃 + 输入栏整形 |
+| `dsh-warm-brandgag` | 品牌文字彩蛋 |
+| `dsh-warm-wallpaper` | 动态壁纸（纸 / 摩尔纹） |
+
+> **从旧的多包版本升级**：如果你之前分别装过 `dsh-warm-shared`、`dsh-warm-wallpaper`、
+> `dsh-warm-brandgag`，先把它们从 profile 里卸掉，再装本版；否则同名 entry 会被重复插入。
+>
+> ```bash
+> dsh plugin remove --profile web dsh-warm-shared dsh-warm-wallpaper dsh-warm-brandgag
+> dsh plugin add --profile web 'git+https://github.com/yunliya-cuter/dsh-warm-ui.git'
+> ```
 
 ### 验证装好了
 
 打开页面后，左下角应出现 **「外观 · <当前档>」** 一行（本插件注册到 `sidebar.footer.action`）；
+点开「外观」面板，里面应能看到 **「壁纸」** 分组；侧栏品牌徽章应显示 **「遛狗绳」**；
 整站强调色变成暖琥珀、输入卡片带玻璃质感即为生效。控制台可查：
 
 ```js
+window.__DSH_BOOT__.entries.filter((e) => e.id.startsWith("dsh-warm-")).map((e) => e.id)
+// => ["dsh-warm-shared", "dsh-warm-ui", "dsh-warm-brandgag", "dsh-warm-wallpaper"]
 window.__dshWarmExtra.glass   // => { alive: true, generation: 1 }
+window.__dshWarmAppearance.ids() // => ["dsh-warm-wallpaper"]（壁纸分组已并进外观面板）
 ```
 
 ## 卸载
 
 ```bash
-dsh plugin remove --profile web dsh-warm-ui dsh-warm-shared
+dsh plugin remove --profile web dsh-warm-ui
 ```
 
-bundles 与 `node_modules` 会被自动清理，刷新页面即回出厂配色。
+bundles 与 `node_modules` 会被自动清理，刷新页面即回出厂配色。如果 profile 里还留着旧版
+分开安装的三个子包，再补一条：
+
+```bash
+dsh plugin remove --profile web dsh-warm-shared dsh-warm-wallpaper dsh-warm-brandgag
+```
 
 ## 从本地工作区开发（改代码即时生效）
 
 不想走 git 安装、就在本仓库上改代码时，直接把**本地路径**作为 spec 装进来：
 
 ```bash
-dsh plugin add --profile web \
-  "$(pwd)" \
-  "$(pwd)/preview/shared"
+dsh plugin add --profile web "$(pwd)"
 ```
 
-`dsh plugin add` 接受本地绝对路径（会做成 `link:` 依赖），改完 `lib/client.js`
-**刷新浏览器**即可生效（客户端 bundle 由 webserver 按请求读盘，不用重启服务）。
+`dsh plugin add` 接受本地绝对路径（会做成 `link:` 依赖），`preview/shared`、`preview/wallpaper`、
+`preview/brandgag` 都通过主包的相对路径 entry 加载。改完 `lib/client.js`（或其他子包的
+`lib/client.js`）**刷新浏览器**即可生效（客户端 bundle 由 webserver 按请求读盘，不用重启服务）。
 
 > 注意：改了包的 `dsh.client` 清单（例如动 `external`）需要**重启** dsh 才会被重新读取 ——
 > 宿主把包元数据缓存在内存里，换 patch 不会让它重读 `package.json`。
@@ -314,15 +336,18 @@ localStorage.removeItem('dsh.conversation.contentWidth'); location.reload();
   Chromium 认。所以"玻璃底下的内容被扭 / 在动"这件事只在 Chromium 上看得见 —— 见
   `contract/ui-contract.md` 第 6 节与 `tools/probes/engine-glass.js`。
 
-## 包结构（谁共享、谁独立）
+## 包结构（单包多插件）
 
-| 包 | 位置 | 说明 |
+以下 4 个包都**随 `dsh-warm-ui` 一起发布**；其中前三个是主包的子目录，由主包的
+`cordis.patch.yml` 相对路径 entry 一起挂载，只有 `dsh-warm-ui` 需要被安装：
+
+| 包 | 包内位置 | 说明 |
 | --- | --- | --- |
 | `dsh-warm-ui` | 仓库根 | 暖色 token 层 + 输入栏工具行整形（界面主体） |
-| `dsh-warm-wallpaper` | `preview/wallpaper` | 动态壁纸（关 / 纸 / 摩尔纹 / 焦散） |
+| `dsh-warm-wallpaper` | `preview/wallpaper` | 动态壁纸（关 / 纸 / 摩尔纹） |
 | `dsh-warm-shared` | `preview/shared` | **共享客户端模块**：样式表注入三件套 + camelCase→kebab。被上面两个包依赖 |
 | `dsh-warm-brandgag` | `preview/brandgag` | 文字彩蛋（独立，不依赖共享包） |
-| `dsh-warm-dynbg` | `preview/dynbg` | **已停用**：什么都不画的空壳，2026-09-19 起已从两份 patch 里摘除，只作历史保留 |
+| `dsh-warm-dynbg` | `preview/dynbg` | **已停用**：什么都不画的空壳，2026-09-19 起已从两份 patch 里摘除，只作历史保留；`private: true`，不会进包 |
 
 依赖方向是单向的：`warm-ui` / `wallpaper` → `shared`。要声明一条依赖，**三处同时改**，
 少一处都是「看起来能跑、换个时机就崩」：

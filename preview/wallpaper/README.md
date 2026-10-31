@@ -1,7 +1,7 @@
-# dsh-warm-wallpaper —— 动态壁纸样品（纸 / 摩尔纹）
+# dsh-warm-wallpaper —— 动态壁纸（纸 / 摩尔纹）
 
-> **这是挂在隔离预览实例 3082 上的样品**，不是成品。真实实例（3081 / `~/.dsh`）的 patch
-> 里从来没有这一行。本目录只包含插件本体；截图、性能脚本、调参中间的对照图都在
+> 本包是 `dsh-warm-ui` 单包 bundle 的子包，**随主包一起发布、一起挂载**：
+> 装 `dsh-warm-ui` 不需要再单独装它。截图、性能脚本、调参中间的对照图在
 > `/mnt/d/projects/_warmtheme_shots/wallpaper-preview/`。
 
 一句话：**一个插件、两种模式、可即时切换**的动态背景，铺满视口、待在所有 UI 面板后面，
@@ -11,30 +11,20 @@
 
 ## 1. 开关与切换
 
-| 做什么 | 命令 / 操作 |
+| 做什么 | 操作 |
 | --- | --- |
-| 挂上插件 | `bash /mnt/d/projects/dsh-warm-ui/preview/toggle-wallpaper.sh on` |
-| 摘掉插件 | `bash /mnt/d/projects/dsh-warm-ui/preview/toggle-wallpaper.sh off` |
-| 看状态 | `bash /mnt/d/projects/dsh-warm-ui/preview/toggle-wallpaper.sh status` |
-| 切模式 | 侧栏底部**「壁纸」那一行**（在「外观」「提灯」下面，`order: 30`）→ 点开选 **关 / 纸 / 摩尔纹** |
+| 切模式 | 侧栏底部 **「外观」→「壁纸」分组** → 选 **关 / 纸 / 摩尔纹** |
+| 脚本口 | `window.__dshWallpaper.setMode(0|1|2)`、`.state()` |
 
-- 控件注册在 `sidebar.footer.action`，`id: dsh-warm-wallpaper-control`，`order: 30`
-  （外观 10 / 提灯 20 / 壁纸 30，三个各占一整行，不挤）。
+- 壁纸分组优先并进 `dsh-warm-ui` 的「外观」面板（`window.__dshWarmAppearance`）；
+  拿不到该扩展点时退回 `sidebar.footer.action` 的独立一行（`id: dsh-warm-wallpaper-control`，`order: 30`）。
 - 选择记在 `localStorage["dsh-wallpaper-mode"]`，默认 `2`（摩尔纹）。
-- 脚本口：`window.__dshWallpaper.setMode(0|1|2)`、`.state()`、`.configure({...})`（后者只在 3082 调参用）。
-- **改了插件或 patch 之后要刷新浏览器**；摘/挂插件（patch 里的 insert 块）需要跑一次
-  `start-preview.sh` 重启，**重启会换 token**。
+- 只改 `lib/client.js` 刷新浏览器即生效；改包的 `dsh.client` 清单要重启 dsh。
 
-### 回滚（一行）
+### 回滚
 
-```bash
-bash /mnt/d/projects/dsh-warm-ui/preview/toggle-wallpaper.sh off && bash /mnt/d/projects/dsh-warm-ui/preview/start-preview.sh
-```
-
-只想过把瘾：`toggle-wallpaper.sh off` 之后**刷新一次浏览器页面**即可
-（patch 是热加载的 —— profiles/web/package.json 写着 `dsh.profile.patchReload: "live"`，
-dsh-app-boot 的 watchUserPatches 用 cordis HMR 盯着它，加/删条目都不用重启），
-UI 立刻回到完全不透明。
+在「外观 → 壁纸」里选 **关**，或执行 `window.__dshWallpaper.setMode(0)`。
+要彻底移除整个暖色系列，卸载主包 `dsh plugin remove --profile web dsh-warm-ui`。
 
 ### 取当前 token
 

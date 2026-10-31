@@ -2,7 +2,8 @@
 # 在「工作区内的临时 home」里搭一套可交互预览环境：
 #   * 复制真实 profile（含 @gbthui/dsh-auto-review、@dsh-external/dsh-prompt-optimizer）
 #   * 只写一份最小的 settings.yaml（主题偏好 = 深色）
-#   * 把 dsh-warm-ui 以绝对路径插入该 profile 的 patch
+#   * 把 dsh-warm-ui 单包以 link 依赖挂进 profile 的 bundles
+#     （单包内部会一次带出 shared / wallpaper / brandgag 四个 entry）
 # 全程只写工作区内，不碰 ~/.dsh。
 #
 #   bash /mnt/d/projects/dsh-warm-ui/preview/setup-preview-home.sh
@@ -14,9 +15,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="$(cd "$HERE/.." && pwd)"
 # 共用常量 / patch 片段操作各只有一处定义（scripts/ 下），本脚本只调用。
 source "$SRC_DIR/scripts/warm-config.sh"
-source "$SRC_DIR/scripts/patch-block.sh"
 
-ID="dsh-warm-ui"
 REAL_HOME="${REAL_DSH_HOME:-$WARM_REAL_HOME_DEFAULT}"
 REAL_PROFILE="$REAL_HOME/$WARM_PROFILE_SUBDIR"
 # 注：这一行此前**写死**成工作区路径、连覆盖都不允许（没有 `:-` 默认值），与其它 4 个
@@ -33,6 +32,24 @@ rm -rf "$PREVIEW_PROFILE"
 mkdir -p "$(dirname "$PREVIEW_PROFILE")"
 cp -a "$REAL_PROFILE" "$PREVIEW_PROFILE"
 echo "    已复制到 $PREVIEW_PROFILE"
+
+echo "==> 1.5/5 迁移旧的多包 warm 依赖（单包 bundle 已内置 shared / wallpaper / brandgag）"
+python3 - "$PREVIEW_PROFILE/package.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, encoding="utf-8") as f:
+    manifest = json.load(f)
+for name in ("dsh-warm-shared", "dsh-warm-wallpaper", "dsh-warm-brandgag"):
+    manifest.get("dependencies", {}).pop(name, None)
+    profile = manifest.setdefault("dsh", {}).setdefault("profile", {})
+    profile["bundles"] = [item for item in profile.get("bundles", []) if item != name]
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(manifest, f, ensure_ascii=False, indent=2)
+    f.write("\n")
+PY
+for name in dsh-warm-shared dsh-warm-wallpaper dsh-warm-brandgag; do
+  rm -f "$PREVIEW_PROFILE/node_modules/$name"
+done
 
 echo "==> 2/5 复制工作区记录 / 会话 / 自定义预设（只读源，写入预览 home）"
 rm -rf "$PREVIEW_HOME/storages" "$PREVIEW_HOME/sessions" "$PREVIEW_HOME/.agent-presets"
@@ -68,13 +85,26 @@ echo "==> 4/5 复制 settings.yaml，并写入预览实例专用的模型配置"
 cp "$REAL_HOME/settings.yaml" "$PREVIEW_HOME/settings.yaml"
 python3 "$HERE/apply-preview-settings.py" "$PREVIEW_HOME/settings.yaml"
 
-echo "==> 5/5 插入 dsh-warm-ui"
-if patch_block_present "$PREVIEW_PROFILE/$WARM_PATCH_NAME" "$ID"; then
-  echo "    已存在，跳过"
-else
-  patch_block_add "$PREVIEW_PROFILE/$WARM_PATCH_NAME" "$ID" "$SRC_DIR/lib/index.js"
-  echo "    已插入（源码路径：$SRC_DIR/lib/index.js）"
-fi
+echo "==> 5/5 确认 dsh-warm-ui 单包已挂进预览 profile"
+python3 - "$PREVIEW_PROFILE/package.json" "$SRC_DIR" <<'PY'
+import json, sys
+path, src = sys.argv[1:3]
+with open(path, encoding="utf-8") as f:
+    manifest = json.load(f)
+deps = manifest.setdefault("dependencies", {})
+deps["dsh-warm-ui"] = "link:" + src
+profile = manifest.setdefault("dsh", {}).setdefault("profile", {})
+bundles = profile.setdefault("bundles", [])
+if "dsh-warm-ui" not in bundles:
+    bundles.append("dsh-warm-ui")
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(manifest, f, ensure_ascii=False, indent=2)
+    f.write("\n")
+PY
+mkdir -p "$PREVIEW_PROFILE/node_modules"
+rm -rf "$PREVIEW_PROFILE/node_modules/dsh-warm-ui"
+ln -s "$SRC_DIR" "$PREVIEW_PROFILE/node_modules/dsh-warm-ui"
+echo "    已挂载 $SRC_DIR（单包含 shared / wallpaper / brandgag）"
 
 echo
 echo "预览 home 就绪：$PREVIEW_HOME"

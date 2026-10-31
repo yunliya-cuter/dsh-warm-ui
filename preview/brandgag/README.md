@@ -1,4 +1,4 @@
-# dsh-warm-brandgag —— 品牌文字恶搞彩蛋（隔离预览专用）
+# dsh-warm-brandgag —— 品牌文字恶搞彩蛋
 
 把 DSH 侧栏左上角的品牌文字换掉：
 
@@ -9,9 +9,8 @@
 
 鲸鱼图标**不动**。
 
-> ⚠️ 只挂在**隔离预览实例 3082**（home `/mnt/d/projects/.dsh-warm-preview`）。
-> 真实实例（3081，`~/.dsh`）的 patch 里从来没有这一条，所以永远不受影响。
-> 被 3081 和 3082 共用的 `/mnt/d/projects/dsh-warm-ui/lib/client.js` **一个字节都没改**。
+> 本包是 `dsh-warm-ui` 单包 bundle 的子包，**随主包一起发布、一起挂载**：
+> 装 `dsh-warm-ui` 不需要再单独装它。
 
 ## 探查结果：这一片没有文本节点，是一整块 SVG
 
@@ -87,17 +86,12 @@
 
 ## 开关 / 回滚
 
-```bash
-# 查看状态
-bash /mnt/d/projects/dsh-warm-ui/preview/toggle-brandgag.sh status
-
-# 彻底关掉（改回原样）
-bash /mnt/d/projects/dsh-warm-ui/preview/toggle-brandgag.sh off
-bash /mnt/d/projects/dsh-warm-ui/preview/start-preview.sh   # 重启预览（会打印新 token）
+```js
+window.__dshBrandgag.off()   // 立刻还原，并阻止 React 重渲染后重新铺上
+window.__dshBrandgag.on()    // 再铺回来
 ```
 
-`off` 只删预览 patch 里 `# >>> dsh-warm-brandgag >>>` … `# <<< dsh-warm-brandgag <<<`
-之间的那一块；重启后插件不再加载，界面回到 `deepseek` / `HARNESS`。
+要彻底移除整个暖色系列，卸载主包 `dsh plugin remove --profile web dsh-warm-ui`。
 
 **不改配置的临时关法**（只对当前这个页面有效，刷新即恢复）：
 
@@ -106,8 +100,7 @@ window.__dshBrandgag.off()   // 立刻还原，并阻止 React 重渲染后重�
 window.__dshBrandgag.on()    // 再铺回来
 ```
 
-彻底删干净：`toggle-brandgag.sh off` + 重启，然后删掉本目录，
-（可选）删掉 `preview/toggle-brandgag.sh`。共用文件从未被改动，无需还原任何东西。
+彻底删干净：从主包中移除本子目录并重新打包即可；卸载主包会连同本插件一起移除。
 
 ## 文件
 

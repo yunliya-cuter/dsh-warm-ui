@@ -38,6 +38,8 @@
  *  16. 命令模式玻璃 —— 契约 glass.commandMenu 在代码里成立：/ 菜单靠厚底色而非 blur
  *                   （卡片内部采不到页面背景），不透明度不低于契约地板
  *  17. 卡片包含块 —— 契约 glass.containingBlock 在代码里成立：带 backdrop-filter 的元素会
+ *  18. warm 系列打包 —— 主包 files 收齐 shared/wallpaper/brandgag，cordis.patch.yml 每个子包
+ *                   都有一条相对路径 entry（单包安装 = 完整暖色系列，不再漏装）
  *                   成为 fixed 后代的包含块，而 DSH 的 Tooltip 气泡正是 fixed 且渲染在卡片
  *                   内部 ⇒ 模糊必须外置到卡片的**兄弟层**、卡片只留 isolation:isolate。
  *                   守「只改登记的槽位」「卡片被显式置 none」「层插在卡片之前」
@@ -47,6 +49,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { checkWarmSeries } from "./check-warm-series.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -987,6 +990,7 @@ const checks = [
 	["探针端口", checkProbePort],
 	["命令模式玻璃", checkCommandMenuGlass],
 	["卡片包含块", checkGlassContainingBlock],
+	["warm 系列打包", () => checkWarmSeries(ROOT, read, add)],
 ];
 for (const [label, run] of checks) {
 	const before = findings.length;
