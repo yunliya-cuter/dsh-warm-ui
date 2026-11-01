@@ -2808,8 +2808,22 @@ ${clearSurfaceSelector()} {
 				let cooldown = 0;
 				const t0 = performance.now();
 
+				/* ── 玻璃浮层让路（2026-11-01）────────────────────────────────────
+				 * 解释小助手那块浮窗用的是 backdrop-filter：它需要**每帧**把身后那一块
+				 * 重新栅格化。壁纸每帧都在画，那块就永远是「脏」的 —— 于是浮窗一打开，
+				 * 整页每帧都多付一次重栅格。真实 GPU（AMD/ANGLE）实测：
+				 *   浮窗关：avg 21.0ms / p95 34.8ms
+				 *   浮窗开 + 壁纸在画：avg 24.4ms / p95 50.0ms   ← 用户说的「一开就卡」
+				 *   浮窗开 + 壁纸停笔：avg 19.0ms / p95 33.2ms   ← 和不打开一样
+				 * 壁纸是 48s/113s 尺度的慢动画，停几秒肉眼完全看不出来；
+				 * 换来的是「打开浮窗和不打开一样流畅」。关掉浮窗立刻接着画。 */
+				const GLASS_SELECTOR = ".dsh-explain-assistant-overlay,[data-wta-glass-surface]";
+				const GLASS_ATTRIBUTE = "data-ea-glass-open";
+				let glassPresent = false;
+
 				const step = (now) => {
 					raf = 0;
+					if (glassPresent) return;
 					const mode = readMode();
 					const kind = MODES[mode] ? MODES[mode].kind : null;
 					if (kind !== currentKind) {
@@ -2856,6 +2870,35 @@ ${clearSurfaceSelector()} {
 					cooldown = 0;
 					if (!raf && !document.hidden && !reduce.matches) raf = window.requestAnimationFrame(step);
 				};
+
+				/* 玻璃浮层出现 = 停笔；消失 = 接着画。挂在 body 的 childList 上：
+				   浮窗就是 body 的一个子节点，挂上/摘掉各触发一次，不轮询。 */
+				const syncGlassPresence = () => {
+					let present = false;
+					try {
+						present = document.documentElement.hasAttribute(GLASS_ATTRIBUTE) || !!document.querySelector(GLASS_SELECTOR);
+					} catch (error) { present = false; }
+					if (present === glassPresent) return;
+					glassPresent = present;
+					if (present) {
+						if (raf) { window.cancelAnimationFrame(raf); raf = 0; }
+					} else {
+						kick();
+					}
+				};
+				const glassObserver = typeof MutationObserver === "function"
+					? new MutationObserver(syncGlassPresence)
+					: null;
+				if (glassObserver) {
+					/* 属性那条是主路径（浮窗挂载/销毁时置位，零轮询、零延迟）；
+					   body 的 childList 那条是兜底，用来接住其它玻璃浮层（data-wta-glass-surface）。 */
+					glassObserver.observe(document.documentElement, { attributes: true, attributeFilter: [GLASS_ATTRIBUTE] });
+					glassObserver.observe(document.body, { childList: true });
+				}
+				/* 兜底巡检：主路径是事件驱动，但「恢复」这一步必须绝对可靠 ——
+				   漏一次就变成壁纸永远停在最后一帧。500ms 一次 hasAttribute，代价是零。 */
+				const glassPoll = window.setInterval(syncGlassPresence, 500);
+				syncGlassPresence();
 
 				/* 模式一变：挂上/摘掉画布、写根属性、点亮或撤掉「大面透明」覆盖 */
 				repaint = () => {
@@ -3174,6 +3217,8 @@ ${clearSurfaceSelector()} {
 				};
 
 				return () => {
+					window.clearInterval(glassPoll);
+					if (glassObserver) glassObserver.disconnect();
 					window.clearTimeout(resizeTimer);
 					window.clearInterval(controlTimer);
 					if (raf) window.cancelAnimationFrame(raf);
