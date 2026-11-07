@@ -146,9 +146,9 @@ var(--wta-motion-sel-strength), transparent)。强调色由暖色 token 提供�
 1. 图层必须是 display: contents。position: fixed 的包裹层会被浏览器单独合成，内层
    mix-blend-mode 的"背景"变成透明的自己 —— 高亮退化成一块盖住文字的不透明色块
    （实测：整行只剩一个 RGB 值，字全被吃掉）。
-2. ::selection 的开关属性挂在 <html> 上，所以那条规则**不能**写成
-   body[...] [data-wta-motion-sel] ::selection —— <html> 不是 body 的后代，规则永远不匹配，
-   结果是自绘高亮和原生蓝叠成两层（3082 实测）。
+2. ::selection 的开关属性（`data-wta-motion-sel`）**挂在"这次要画的那块滚动容器"上**，
+   不是 `<html>`（2026-11-07 改的，原因见下面「为什么属性不能挂在 <html> 上」）。
+   规则写成 `[data-wta-motion-sel] ::selection` —— 挂在谁身上就管谁。
 
 **自检口**
 
@@ -160,17 +160,31 @@ window.__dshWarmMotion.set(0)         // 等价于点外观面板里的「关」
 
 **原生蓝色不能一闪而过（2026-10-31 用户报"选中有蓝色一闪"）**
 
-原生选中色由一条属性控制：`html[data-wta-motion-sel] ::selection { background: transparent }`。
+原生选中色由一条属性控制：`[data-wta-motion-sel] ::selection { background: transparent }`。
 它曾经是"选区出现后"才写的 —— 而浏览器可能在派发 `selectionchange` 之前就把蓝色画上屏，
 于是拖选首帧必露一次蓝。现在改成**结构性**做法：
 
-- 动效层**挂载时**就把属性打开，之后只在"确实画不出来"时还原（块数超限、量不到矩形、
-  引擎停用、销毁、paint 内部异常）；
+- **按下去那一刻**就把属性挂上（pointerdown 早于 selectionchange），键盘扩选同理；
+  之后只在"确实画不出来"时还原（块数超限、量不到矩形、引擎停用、销毁、paint 内部异常）；
 - 正常路径（光标分支、空闲分支、失焦）**一律不**去动它 —— 那些地方一还原就会在
   "按下鼠标、选区还没形成"的那一帧留下空窗；
 - `pointerdown` / 键盘扩选（Shift+方向、Ctrl+A）也各补一次，用于属性被外部摘掉的极端情况；
-- `syncNativeSel()` 以 **DOM 实际属性**为准判断，不看 JS 标志位：旧引擎销毁时会 removeAttribute，
-  标志位不知道，就再也不补了（实测松手后原生蓝又回来）。
+- `syncNativeSel()` 自己记着"属性挂在哪个元素上"（`nativeSelHost`），换容器就搬过去、还原时清干净；
+  不再靠读 `document.documentElement` 猜状态。
+
+**为什么属性不能挂在 <html> 上（2026-11-07 用户报「小助手选中文字卡顿」）**
+
+`::selection` 的样式重算是按子树算的：属性挂在 `<html>` 上 = 整棵文档都在这条规则的作用域里，
+于是**每一次选区变化**（哪怕选区在小助手浮窗里、根本不归我们画）浏览器都要给每个元素重算一次
+`::selection`。3082 真机实测（2593 个节点）：单次重算 24ms，拖选时每帧两次 ≈ 46ms/帧，
+p95 100ms、28 个长任务。把属性挪到浮窗自己的滚动容器上之后同一段拖选：样式重算 1546ms → 1ms、
+帧间隔 66.6 → 16.7ms、长任务 28 → 0。
+
+所以现在：
+- `nativeSelScopeFor(node)` 找"这次选区归谁管"（最近的、真的能滚的祖先）；
+- 落在别人的地盘（`SKIP_CLOSEST`：`.ea-field`、`.dsh-explain-assistant-overlay`）里时
+  **一个属性都不挂** —— 那边的选区由小助手自己的高亮层负责；
+- 挂载时**不再**抢占式打开属性（旧写法就是在这里把 `<html>` 长期占住的）。
 
 逐帧取证（每个 rAF 记录"选区已存在但原生色未关"的帧数，目标 0）：
 
